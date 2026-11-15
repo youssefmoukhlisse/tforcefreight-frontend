@@ -1,0 +1,185 @@
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-heading {
+  padding-block: 30px 20px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-breadcrumb {
+  margin-bottom: 17px;
+  padding-inline-start: 5px;
+  color: #333;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-breadcrumb a {
+  color: #3865ac;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-content {
+  padding-block: 0 112px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico {
+  padding-top: 40px;
+  overflow-wrap: normal;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-visual-hero + .regional-puerto-rico {
+  padding-top: 80px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico section:first-child h2 {
+  margin-bottom: 36px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-visual-map {
+  max-width: min(100%, 500px);
+  margin-block: 42px 34px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico ul:not(:first-child),
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico ol {
+  margin-top: 22px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .islands-schedule {
+  display: grid;
+  gap: 24px;
+  margin-block: 56px 40px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table {
+  line-height: 24px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table caption {
+  padding-block: 13px;
+  line-height: 25px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table thead th {
+  padding-block: 11px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody th {
+  border-bottom: 1px solid #777;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody td {
+  padding-block: 4px;
+  border-bottom: 0;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:first-child td {
+  padding-top: 12px;
+}
+
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:last-child td {
+  padding-bottom: 12px;
+}
+
+@media (max-width: 1199px) {
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .container.info-heading,
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .container.info-content {
+    width: calc(100% - 24px);
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-heading {
+    padding-top: 20px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico {
+    padding-left: 0;
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1199px) {
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico {
+    width: 67.5%;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico {
+    width: calc(100% - 15px);
+  }
+}
+
+@media (max-width: 767px) {
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-heading {
+    padding-bottom: 10px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-heading h1 {
+    font-size: 24px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-content {
+    padding-bottom: 160px;
+    font-size: 15px;
+    line-height: 24px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico {
+    line-height: 24px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-visual-hero + .regional-puerto-rico {
+    padding-top: 70px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-visual-map {
+    margin-top: 35px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-puerto-rico h3 {
+    font-size: 15px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .islands-schedule {
+    gap: 56px;
+    margin-block: 30px 64px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table {
+    font-size: 10px;
+    line-height: 16px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table caption {
+    padding-inline: 10px;
+    line-height: 21px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table th,
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table td {
+    padding-inline: 10px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table thead th {
+    padding-block: 15px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:first-child td {
+    padding-top: 16px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:last-child td {
+    padding-bottom: 14px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:first-child:not(:only-child) td {
+    padding-top: 20px;
+  }
+
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .regional-sailing-table tbody tr:last-child:not(:only-child) td {
+    padding-bottom: 18px;
+  }
+}
+
+@media (max-width: 380px) {
+  .information-page[data-information-page='PuertoRicoUSVirginIslands'] .info-breadcrumb {
+    line-height: 22.5px;
+  }
+}

@@ -13,3 +13,9 @@ The test compared fresh Chrome screenshots of five local preview pages with the 
 All 30 updated local captures returned HTTP 200 with zero browser errors, broken images, failed assets or document-level horizontal overflow. The Canada gateway table scrolls within its labeled region on narrow viewports. The full report, captures, overlays and pixel differences are in the `tforce-regional-local` audit output. The regional retest did not verify a new Railway deployment.
 
 The regional hero photographs and map files account for part of the remaining visual difference. Authorization to republish these assets and the complete original copy was not established. The pages link to the corresponding first-party maps and source material. Canada’s historical 2022 border notice is represented by a link to carrier guidance to avoid presenting a historical mandate as current. Reference PDF print actions and the Mexico software download remain available from the official pages.
+
+## Canada and Puerto Rico/U.S. Virgin Islands follow-up
+
+Both routes restore the widescreen photo and in-column map layout with the reusable photographs and derived maps documented in [REGIONAL-MEDIA.md](REGIONAL-MEDIA.md). The original carrier maps remain linked. Canada retains all four gateway columns without side-scrolling at 375px and 390px; its customs links and bilingual invoice actions remain in the relevant sections. The islands page uses the carrier's published sailing days in two responsive tables, and links to the official route, tariff, and government filing information for current shipping details.
+
+Use the same original captures in the previous published Playwright report to compare this follow-up. It changes only the two regional pages and their scoped styles. The photos and map drawings are distinct from the carrier originals, and full text identity is outside this measurement.

@@ -8,6 +8,7 @@ const publicFiles = new Set([
   'index.html', 'app.js', 'app.css', 'shell.css', 'information.js', 'information.css',
   'operations.js', 'operations.css', 'regional-parity.js', 'regional-parity.css',
   'resource-parity.js', 'resource-parity.css',
+  'canada-detail.css', 'islands-detail.css',
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

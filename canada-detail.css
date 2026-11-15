@@ -1,0 +1,152 @@
+.information-page[data-information-page='Canada'] .info-heading {
+  padding-block: 30px 20px;
+}
+
+.information-page[data-information-page='Canada'] .info-breadcrumb {
+  margin-bottom: 17px;
+  padding-inline-start: 5px;
+  color: #333;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.information-page[data-information-page='Canada'] .info-breadcrumb a {
+  color: #3865ac;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice {
+  display: block;
+  padding-block: 15px 16px;
+  line-height: 24px;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice p {
+  margin: 0;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice img {
+  vertical-align: -3px;
+}
+
+.information-page[data-information-page='Canada'] .regional-canada {
+  width: calc(75% - 60px);
+  padding-top: 68px;
+  padding-left: 0;
+  overflow-wrap: normal;
+}
+
+.information-page[data-information-page='Canada'] .container.info-content {
+  width: min(1376px, calc(100% - 24px));
+}
+
+.information-page[data-information-page='Canada'] .regional-canada > p:first-child {
+  margin-bottom: 34px;
+}
+
+.information-page[data-information-page='Canada'] .regional-gateway-table {
+  min-width: 0;
+  line-height: 16px;
+}
+
+.information-page[data-information-page='Canada'] .regional-gateway-table th {
+  padding: 10px 17px;
+  vertical-align: bottom;
+}
+
+.information-page[data-information-page='Canada'] .regional-gateway-table td {
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.information-page[data-information-page='Canada'] .regional-anchor-links {
+  line-height: 16px;
+  margin-block: 40px 20px;
+}
+
+.information-page[data-information-page='Canada'] .canada-document-list {
+  margin-top: 42px;
+}
+
+.information-page[data-information-page='Canada'] .canada-document-list li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 38px;
+  align-items: start;
+  padding: 24px 20px;
+  border-top: 1px solid #777;
+}
+
+.information-page[data-information-page='Canada'] .canada-document-list li + li {
+  border-top-width: 2px;
+}
+
+.information-page[data-information-page='Canada'] .canada-pdf-icon {
+  display: grid;
+  width: 32px;
+  height: 40px;
+  margin-top: 16px;
+  place-items: center;
+  border: 1px solid #e91d13;
+  border-radius: 2px;
+  color: #bc2116;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.information-page[data-information-page='Canada'] .regional-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin-top: 7px;
+  font-size: 16px;
+}
+
+.information-page[data-information-page='Canada'] .regional-document-actions > * + * {
+  margin-inline-start: 10px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid #777;
+}
+
+@media (min-width: 1600px) {
+  .information-page[data-information-page='Canada'] .regional-canada {
+    width: calc(75% - 30px);
+  }
+}
+
+@media (max-width: 991px) {
+  .information-page[data-information-page='Canada'] .regional-canada {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .information-page[data-information-page='Canada'] .container.info-heading {
+    width: calc(100% - 24px);
+  }
+
+  .information-page[data-information-page='Canada'] .info-heading {
+    padding-block: 20px 10px;
+  }
+
+  .information-page[data-information-page='Canada'] .info-breadcrumb {
+    margin-bottom: 17px;
+  }
+
+  .information-page[data-information-page='Canada'] .info-heading h1 {
+    font-size: 24px;
+  }
+
+  .information-page[data-information-page='Canada'] .regional-gateway-table th {
+    padding-inline: 8px;
+  }
+
+  .information-page[data-information-page='Canada'] .regional-service .canada-document-list li {
+    gap: 30px;
+    padding-inline: 20px 12px;
+    font-size: 16px;
+  }
+
+  .information-page[data-information-page='Canada'] .regional-document-actions {
+    font-size: 14px;
+  }
+}

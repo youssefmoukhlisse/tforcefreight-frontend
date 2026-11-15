@@ -2,6 +2,79 @@
   container-type: inline-size;
 }
 
+.information-page[data-information-page='PuertoRicoUSVirginIslands'] {
+  container-type: inline-size;
+}
+
+.regional-visual-hero {
+  position: relative;
+  width: min(100cqw, 1600px);
+  margin: 0 calc((100% - min(100cqw, 1600px)) / 2);
+}
+
+.regional-visual-hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 1;
+  object-fit: cover;
+}
+
+.regional-visual-hero figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  background-color: #111d;
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.regional-visual-hero figcaption a {
+  color: inherit;
+}
+
+.regional-visual-map {
+  width: fit-content;
+  max-width: 100%;
+  margin: 40px 0 48px;
+}
+
+.regional-visual-map img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.regional-visual-map figcaption {
+  margin-top: 6px;
+  color: #474747;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice + .regional-visual-hero {
+  margin-top: 16px;
+}
+
+.information-page[data-information-page='Canada'] .regional-visual-hero img {
+  object-position: 50% 54%;
+}
+
+@media (min-width: 768px) {
+  #app:has(.information-page:is([data-information-page='Canada'], [data-information-page='PuertoRicoUSVirginIslands'])) > .cookie-notice {
+    width: 75%;
+    max-width: none;
+    padding-inline: clamp(42px, 6.4vw, 120px);
+  }
+
+  #app:has(.information-page:is([data-information-page='Canada'], [data-information-page='PuertoRicoUSVirginIslands'])) > .cookie-notice h2 {
+    margin-bottom: 4px;
+  }
+}
+
 .information-page[data-information-page='Canada'] .info-content {
   padding-top: 0;
 }
