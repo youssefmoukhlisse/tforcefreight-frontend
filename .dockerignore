@@ -1,0 +1,6 @@
+.git
+.github
+test-results
+README.md
+*.log
+.DS_Store

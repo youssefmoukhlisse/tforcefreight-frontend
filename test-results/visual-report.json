@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-11-15T00:00:00+07:00",
+  "method": "Playwright full-page screenshots compared pixel-by-pixel with pixelmatch (threshold 0.1, antialiasing excluded)",
+  "pages": [
+    {
+      "name": "Home desktop",
+      "viewport": { "width": 1512, "height": 765 },
+      "referenceImage": "reference/home-1512.png",
+      "currentImage": "current/home-1512.png",
+      "diffImage": "diff/home-1512.png",
+      "referenceSize": [1512, 1909],
+      "currentSize": [1512, 1911],
+      "comparedPixels": 2886408,
+      "differentPixels": 90827,
+      "similarity": 0.9685
+    },
+    {
+      "name": "Home compact",
+      "viewport": { "width": 844, "height": 789 },
+      "referenceImage": "reference/home-844.png",
+      "currentImage": "current/home-844.png",
+      "diffImage": "diff/home-844.png",
+      "referenceSize": [844, 1838],
+      "currentSize": [844, 1849],
+      "comparedPixels": 1551272,
+      "differentPixels": 140853,
+      "similarity": 0.9092
+    }
+  ],
+  "notes": [
+    "Scores are evidence for the captured home-page states, not a claim of site-wide 100% parity.",
+    "The original contains time-varying alerts, session-dependent cookie states, protected data, and live backend responses.",
+    "Operational forms in the reconstruction are frontend-only and do not transmit data."
+  ]
+}
