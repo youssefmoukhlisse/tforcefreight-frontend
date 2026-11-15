@@ -16,7 +16,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .crumb{display:flex;align-items:center;gap:10px;color:#333;margin-top:16px;font-size:16px}
 h1{margin:16px 0 40px;color:#333;font:400 32px/1.15 Georgia,'Times New Roman',serif}
 .intro{margin:0 0 43px;color:#351e18;font-size:20px;line-height:1.25;font-weight:700}
-.workspace{display:grid;grid-template-columns:290px minmax(0,1020px);column-gap:45px;align-items:start;padding:0 30px 35px}
+.workspace{position:relative;display:grid;grid-template-columns:290px minmax(0,1020px);column-gap:45px;align-items:start;padding:0 30px 35px}
 fieldset{min-inline-size:0}
 .track-switch{display:grid;grid-template-columns:1fr 1fr;padding:0;border:1px solid #808080;border-radius:16px;overflow:hidden;margin:0 0 14px}
 .track-switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -46,12 +46,12 @@ textarea,input:not([type="radio"]),select{display:block;width:100%;min-width:0;b
 }
 .track-loading {
   display: grid;
-  min-block-size: 224px;
+  min-block-size: 112px;
   place-items: center;
 }
 .track-spinner {
   position: relative;
-  inline-size: clamp(84px, 13vw, 200px);
+  inline-size: 96px;
   aspect-ratio: 1;
   animation: track-spinner-turn 1s steps(12) infinite;
 }
@@ -68,22 +68,30 @@ textarea,input:not([type="radio"]),select{display:block;width:100%;min-width:0;b
   opacity: var(--shade, 1);
   content: "";
 }
-.track-spinner span:nth-child(2) { --angle: 30deg; --shade: .95; }
-.track-spinner span:nth-child(3) { --angle: 60deg; --shade: .90; }
-.track-spinner span:nth-child(4) { --angle: 90deg; --shade: .85; }
-.track-spinner span:nth-child(5) { --angle: 120deg; --shade: .80; }
-.track-spinner span:nth-child(6) { --angle: 150deg; --shade: .75; }
-.track-spinner span:nth-child(7) { --angle: 180deg; --shade: .70; }
-.track-spinner span:nth-child(8) { --angle: 210deg; --shade: .65; }
-.track-spinner span:nth-child(9) { --angle: 240deg; --shade: .60; }
-.track-spinner span:nth-child(10) { --angle: 270deg; --shade: .55; }
-.track-spinner span:nth-child(11) { --angle: 300deg; --shade: .50; }
-.track-spinner span:nth-child(12) { --angle: 330deg; --shade: .45; }
+.track-spinner span:nth-child(2) { --angle: 30deg; --shade: .96; }
+.track-spinner span:nth-child(3) { --angle: 60deg; --shade: .93; }
+.track-spinner span:nth-child(4) { --angle: 90deg; --shade: .89; }
+.track-spinner span:nth-child(5) { --angle: 120deg; --shade: .85; }
+.track-spinner span:nth-child(6) { --angle: 150deg; --shade: .82; }
+.track-spinner span:nth-child(7) { --angle: 180deg; --shade: .78; }
+.track-spinner span:nth-child(8) { --angle: 210deg; --shade: .75; }
+.track-spinner span:nth-child(9) { --angle: 240deg; --shade: .71; }
+.track-spinner span:nth-child(10) { --angle: 270deg; --shade: .67; }
+.track-spinner span:nth-child(11) { --angle: 300deg; --shade: .64; }
+.track-spinner span:nth-child(12) { --angle: 330deg; --shade: .60; }
 @keyframes track-spinner-turn {
   to { transform: rotate(360deg); }
 }
-@media (max-width: 820px) {
-  .track-loading { min-block-size: 112px; }
+@media (min-width: 821px) {
+  .track-loading {
+    position: absolute;
+    inset-block-start: 62px;
+    inset-inline: 48px 0;
+    min-block-size: 0;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .track-spinner { inline-size: clamp(132px, 17vw, 200px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .track-spinner { animation: none; }

@@ -173,8 +173,14 @@ form.addEventListener('submit', async event => {
   setSearching(true);
   notice.textContent = 'Searching shipment records.';
   try {
-    const data = await api('/api/tracking/search', { body, signal: request.signal });
+    // Let the loading state stay visible even when the lookup responds quickly.
+    const [response] = await Promise.allSettled([
+      api('/api/tracking/search', { body, signal: request.signal }),
+      new Promise(resolve => setTimeout(resolve, 500)),
+    ]);
     if (currentRequest !== request) return;
+    if (response.status === 'rejected') throw response.reason;
+    const data = response.value;
     renderGroups(data.results || []);
     const count = (data.results || []).reduce((sum, group) => sum + group.shipments.length, 0);
     notice.textContent = count ? `${count} shipment record${count === 1 ? '' : 's'} found.` : 'No shipment records found.';
