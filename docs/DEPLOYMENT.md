@@ -6,6 +6,6 @@
 - Public URL: https://tforcefreight-web-production.up.railway.app
 - Source repository: https://github.com/youssefmoukhlisse/tforcefreight-frontend
 - Source branch: `main`
-- Verified state: successful deployment with no broken images at a 1280 × 720 browser viewport.
+- Rollback reference for the parity pass: `backup/pre-parity-audit`, commit `59d4921e7904d4873d3ce51c3ea1124b6178057c`.
 
-Railway is connected to the GitHub repository and automatically deploys new commits from `main`. The included `Dockerfile` serves the static frontend with Nginx and preserves SPA route fallback behavior.
+Railway deploys new commits from `main`. The `Dockerfile` serves the static frontend with Nginx and preserves direct routes through SPA fallback. Missing static files return 404.

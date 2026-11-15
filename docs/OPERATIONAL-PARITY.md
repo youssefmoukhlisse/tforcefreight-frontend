@@ -1,0 +1,19 @@
+# Operational pages
+
+I compared the public reference with the pre-change Railway deployment in Chrome at 1512px. Measurements come from rendered element bounds. The visual audit reports cover the requested screenshot viewports.
+
+| Route | Priority | Observed difference | Change |
+| --- | --- | --- | --- |
+| `/ltl/apps/Tracking` | P0 | Original opens directly from the Tracking menu. Its PRO tab has a 280 × 122 textarea, one-line instructions and two 100 × 40 buttons. The deployed replica used a 1020 × 90 textarea and a sidebar. | Added the PRO and Reference states, original field labels and form proportions. The Reference tab reveals BOL or PO number, date range and origin and destination controls. |
+| `/ltl/apps/RateEstimate` | P0 | Original accordion bars are 50px tall with 16px text. Four 280px controls occupy distinct columns. The replica had 54px bars, 326px controls and inactive commodity controls. | Added functional accordions, rating mode and repeated commodity fields. Moved linear feet below commodity information. |
+| `/ltl/apps/PickupRequest` | P0 | The anonymous original shows a login banner and assistance. Its document height measured 1186px. The deployed replica showed a pickup form and measured 2017px. | Replaced the unauthenticated form with the public state. Log In hands off to the official website. |
+| `/ltl/apps/TransitTimes` | P1 | Original inputs are 280px and start at x71 and x654. The replica used 689px controls at x56 and x767. | Updated desktop alignment, country order, input labels and country-dependent postal inputs. |
+| `/ltl/apps/DensityCalculator` | P1 | Original has three calculation modes, per-row and total fields, row addition and a measurement guide with a pallet image. The replica had one mode and a single row. | Added three modes, locally calculated values, per-row reset, multiple rows, totals and the existing pallet image. |
+| `/ltl/apps/ServicePointInquiry` | P0 | Original displays a country selector and ZIP Code or City lookup. The deployed replica showed a 404 page. | Added the public form and a link to Transit Times. |
+| `/ltl/apps/ServiceCenterDirectory` | P0 | Original displays a country selector, state or postal finders and the North America image. The deployed replica showed a 404 page. | Added the public form, the country-dependent region selector and the existing image. |
+| `/ltl/apps/ServicePointDownload` | P0 | Original groups 12 public ZIP download links by type and region. The deployed replica showed a 404 page. | Added three groups and all 12 links to the official files. |
+| `/ltl/apps/MyLTL` and `/ltl/apps/ShippingDocuments` | P0 | MyLTL's original navigation starts authentication through the official external provider. The original direct MyLTL path shows Page Not Found. | Kept the replica's legacy URLs as handoffs to the official site. These screens contain no credential fields. |
+
+The Rate Estimate calendar uses the browser date control. The tracking API article is shortened and links to the official developer page. The downloads use direct official links without copying the ZIP archives or freezing the original's dynamic dates and file sizes. Rate, transit, tracking and directory requests show a preview message on submission. Live results, loading states that depend on service responses, authenticated pickup and shipment documents require official integration.
+
+Local Chrome checks covered Tracking tab selection, local submission and reset, commodity mode changes and row addition, postal field updates, the service center region list, the twelve official download destinations, and the field-free pickup and document screens. Density calculation returned 2.0 cubic feet, 40.0 pounds and 20.0 lb/ft³ for two 12 × 12 × 12 inch units weighing 20 pounds each. Adding and clearing density rows also passed. No console errors were observed during these checks.

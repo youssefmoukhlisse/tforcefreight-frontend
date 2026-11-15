@@ -1,6 +1,8 @@
 .git
 .github
 test-results
+docs
+scripts
 README.md
 *.log
 .DS_Store

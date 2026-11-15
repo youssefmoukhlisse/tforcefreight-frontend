@@ -5,10 +5,10 @@ Public-facing frontend reconstruction of `tforcefreight.com`, built from publicl
 ## Local preview
 
 ```bash
-python3 -m http.server 4173
+node scripts/serve-preview.mjs
 ```
 
-Open `http://localhost:4173`. Client-side routes work after the initial page loads; production uses the included Nginx fallback.
+Open `http://127.0.0.1:4173`. The preview and production support direct navigation to frontend routes.
 
 ## Railway
 
@@ -16,8 +16,8 @@ The repository contains a production Dockerfile. Railway can deploy it directly 
 
 ## Verification
 
-Reference screenshots captured from the public original are stored in `test-results/reference`. Current and diff folders are intentionally ignored because they are generated during QA.
+See the [visual regression workflow](docs/VISUAL_AUDIT.md), [informational difference matrix](docs/INFORMATIONAL-PARITY.md), and [operational difference matrix](docs/OPERATIONAL-PARITY.md). The screenshots under `test-results` are from the initial reconstruction. The audit runner writes new captures, overlays, metrics and errors to its configured output directory.
 
 ## Rights and integration note
 
-Assets in `assets` were downloaded from the publicly accessible original site at the owner's request. Before a public production launch, confirm ongoing rights to every logo, photograph, document, and third-party mark. Live operational forms require separately authorized APIs and are not implemented in this frontend milestone.
+The preview retains previously bundled reference assets. Public availability is not a reuse license. This pass did not add original assets or republish whole pages of original copy without clearance; pages that need that material link to the official source. MyLTL uses an official-site handoff, and the preview forms do not submit shipment or customer data.
