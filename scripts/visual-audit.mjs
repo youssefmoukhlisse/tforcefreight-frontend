@@ -194,10 +194,15 @@ async function capture(context, baseUrl, route, file, side, auditState) {
       result.loadTimeout = true;
     }
     await page.evaluate(async () => {
-      const images = [...document.images].filter((image) => image.loading !== 'lazy');
+      // Full-page captures include off-screen content. Request native lazy
+      // images before decoding so an in-flight image is not recorded as broken.
+      const images = [...document.images].filter((image) => image.currentSrc || image.hasAttribute('src') || image.hasAttribute('srcset'));
+      for (const image of images) {
+        if (image.loading === 'lazy') image.loading = 'eager';
+      }
       await Promise.race([
         Promise.all([document.fonts.ready, ...images.map((image) => image.decode().catch(() => {}))]),
-        new Promise((resolve) => setTimeout(resolve, 4000)),
+        new Promise((resolve) => setTimeout(resolve, 6000)),
       ]);
     });
     await openInteraction(page, side, auditState);
