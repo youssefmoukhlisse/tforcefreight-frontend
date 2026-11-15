@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Tracking | Independent Shipment Portal</title>
+  <link rel="stylesheet" href="/tracking/tracking.css">
+  <script src="/tracking/tracking.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#tracking">Skip to shipment tracking</a>
+  <header class="portal">
+    <div class="page portal-inner">
+      <span class="portal-name"><span aria-hidden="true" class="portal-mark">↗</span> Independent Shipment Portal</span>
+      <span id="environment-badge" class="environment" hidden>STAGING · TEST DATA</span>
+      <a href="https://www.tforcefreight.com/ltl/apps/Tracking" rel="noreferrer">Official TForce Freight tracking ↗</a>
+    </div>
+  </header>
+  <main id="tracking" class="page">
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">&gt;</span><span aria-current="page">Tracking</span></nav>
+    <h1>Tracking</h1>
+    <h2 class="intro">Track the status of your shipment by PRO or reference number.</h2>
+    <div class="workspace">
+      <form id="track-form" autocomplete="off" novalidate>
+        <fieldset class="track-switch">
+          <legend class="sr-only">Tracking method</legend>
+          <input type="radio" id="mode-pro" name="mode" value="pro" checked><label for="mode-pro">PRO</label>
+          <input type="radio" id="mode-reference" name="mode" value="reference"><label for="mode-reference">Reference</label>
+        </fieldset>
+        <div id="pro-fields">
+          <label for="track-numbers">PRO Numbers *</label>
+          <textarea id="track-numbers" rows="5" spellcheck="false" maxlength="1500" aria-describedby="pro-hint"></textarea>
+          <p class="field-note" id="pro-hint">Enter up to 25 internal PRO numbers. One per line.</p>
+        </div>
+        <div id="reference-fields" hidden>
+          <label for="reference-kind">Reference type</label>
+          <select id="reference-kind" name="kind"><option value="reference">Reference</option><option value="bol">Bill of Lading (BOL)</option><option value="po">Purchase Order (PO)</option></select>
+          <label for="reference-number">Reference number *</label>
+          <input id="reference-number" name="number" maxlength="90" spellcheck="false">
+          <div class="short-fields">
+            <div><label for="from-date">Ship from date *</label><input id="from-date" type="date" name="fromDate"></div>
+            <div><label for="to-date">Ship to date *</label><input id="to-date" type="date" name="toDate"></div>
+            <div><label for="origin-zip">Origin postal code *</label><input id="origin-zip" name="originZip" maxlength="16"></div>
+            <div><label for="destination-zip">Destination postal code *</label><input id="destination-zip" name="destinationZip" maxlength="16"></div>
+          </div>
+          <p class="field-note">Use the postal codes and shipment date range from your shipment record.</p>
+        </div>
+        <p id="search-error" class="form-error" role="alert" hidden></p>
+        <div class="track-form-actions"><button class="primary" type="submit">Track</button><button class="secondary" type="reset">Reset</button></div>
+        <p class="portal-disclosure">This service tracks internal shipment records only. It is not affiliated with TForce Freight and does not look up its PRO numbers.</p>
+      </form>
+      <div id="track-output" class="track-output" aria-busy="false">
+        <p id="search-status" role="status" class="search-status sr-only"></p>
+        <div id="tracking-results"></div>
+      </div>
+    </div>
+  </main>
+  <dialog id="update-dialog" aria-labelledby="update-title">
+    <form id="update-form">
+      <h2 id="update-title">Send shipment updates</h2>
+      <p>Enter the email address on your shipment. If it matches, we will send a confirmation link before enabling updates.</p>
+      <label for="update-email">Email address</label>
+      <input id="update-email" type="email" autocomplete="email" maxlength="254" required>
+      <p id="update-message" role="status"></p>
+      <div class="dialog-actions"><button class="primary" type="submit">Request updates</button><button class="secondary" type="button" id="close-updates">Close</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

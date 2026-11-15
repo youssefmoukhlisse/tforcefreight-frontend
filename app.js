@@ -185,6 +185,7 @@ function bindEvents() {
   document.querySelectorAll('a[data-route]').forEach(link => link.addEventListener('click', event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || link.target || link.hasAttribute('download')) return;
     const url = new URL(link.href, location.origin);
+    if (/^\/ltl\/apps\/tracking(?:help)?\/?$/i.test(url.pathname)) return;
     if (url.origin === location.origin && !url.hash) { event.preventDefault(); render(url.pathname, true, url.search); }
   }));
   document.querySelectorAll('[data-alert] .alert-close').forEach(button => button.addEventListener('click', () => {
@@ -264,6 +265,15 @@ function closeSearch() {
 
 function operationalSubmit(event) {
   event.preventDefault();
+  if (event.currentTarget.matches('.track-form')) {
+    const input = event.currentTarget.querySelector('textarea');
+    const numbers = input.value.trim().toUpperCase().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (numbers.length <= 25 && numbers.length && numbers.every(number => /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/.test(number))) {
+      try { sessionStorage.setItem('independent-tracking-search', numbers.join('\n')); } catch {}
+    }
+    location.assign('/ltl/apps/Tracking');
+    return;
+  }
   if (!event.currentTarget.reportValidity()) return;
   const message = event.currentTarget.querySelector('.form-message') || document.createElement('div');
   message.className = 'form-message show';
