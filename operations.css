@@ -322,7 +322,7 @@
   margin: 0 0 16px;
 }
 
-.operation-accordion summary {
+.operation-accordion > summary {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -334,11 +334,11 @@
   cursor: pointer;
 }
 
-.operation-accordion summary::-webkit-details-marker {
+.operation-accordion > summary::-webkit-details-marker {
   display: none;
 }
 
-.operation-accordion summary::after {
+.operation-accordion > summary::after {
   margin-left: auto;
   content: '+';
 }
@@ -347,7 +347,7 @@
   content: '−';
 }
 
-.operation-accordion summary small {
+.operation-accordion > summary small {
   font-size: 12px;
 }
 
@@ -374,6 +374,16 @@
 .operation-rate-note {
   padding: 0 15px;
   line-height: 21px;
+}
+
+.operation-rate-mobile-guidance,
+.operation-volume-help,
+.operation-linear-control button {
+  display: none;
+}
+
+.operation-linear-control {
+  display: contents;
 }
 
 .operation-rate .operation-check {
@@ -732,8 +742,12 @@
   }
 
   .page-main:has(.operation-rate) .page-title {
-    margin: 15px 0 5px;
+    margin: 21px 0 5px;
     font-size: 24px;
+  }
+
+  .page-main:has(.operation-rate) .breadcrumbs a {
+    color: #326295;
   }
 
   .operation-rate .operation-login {
@@ -749,6 +763,10 @@
     font-size: 18px;
   }
 
+  .operation-rate > form {
+    margin-top: 35px;
+  }
+
   .operation-rate-grid {
     grid-template-columns: 1fr;
   }
@@ -756,7 +774,20 @@
   .operation-rate-grid > .operation-field {
     width: 100%;
     max-width: 310px;
-    min-height: 76px;
+    min-height: 77px;
+  }
+
+  .operation-rate-grid select,
+  .operation-commodity-row select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%230053a1' stroke-width='2.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 8px;
+  }
+
+  .operation-rate .operation-accordion > summary::after {
+    font-size: 26px;
   }
 
   .operation-rate-discount > .operation-field:first-child {
@@ -766,13 +797,35 @@
   .operation-rate-discount > .operation-field:first-child::after {
     position: absolute;
     top: 48px;
-    left: 150px;
+    left: min(150px, calc(40vw - 6px));
     content: '%';
+  }
+
+  .operation-rate-discount > .operation-field:first-child input {
+    max-width: min(128px, calc(40vw - 28px));
+  }
+
+  .operation-rate-discount > .operation-field:last-child input {
+    max-width: min(134px, calc(40vw - 22px));
   }
 
   .operation-rate-note {
     font-size: 12px;
     line-height: 16px;
+  }
+
+  .operation-rate-mobile-guidance {
+    display: inline;
+  }
+
+  .operation-rate-mobile-guidance a {
+    color: #326295;
+    font-weight: 700;
+  }
+
+  .operation-rate .operation-check {
+    margin-left: 12px;
+    margin-bottom: 16px;
   }
 
   .operation-rate .operation-check input[type="checkbox"] {
@@ -787,9 +840,31 @@
     margin-bottom: 20px;
   }
 
+  .operation-rate .operation-accordion:nth-of-type(2) {
+    position: relative;
+  }
+
+  .operation-rate .operation-accordion:nth-of-type(2)::before {
+    position: absolute;
+    inset: -21px 0 auto;
+    height: 7px;
+    border-top: 1px solid #ddd;
+    border-radius: 6px;
+    content: '';
+  }
+
+  .operation-rate .operation-accordion:nth-of-type(2) > .operation-accordion-body {
+    padding-bottom: 0;
+  }
+
   .operation-rate .operation-tabs span {
     min-height: 37px;
     border-color: #777;
+  }
+
+  .operation-rate .operation-tabs label:first-child {
+    flex-basis: 110px;
+    flex-grow: 0;
   }
 
   .operation-rate .operation-tabs label:first-child span {
@@ -802,15 +877,20 @@
 
   .operation-accordion-body .operation-commodity-row {
     position: relative;
-    grid-template-columns: minmax(0, 155px);
+    grid-template-columns: minmax(0, min(155px, calc(50vw - 40px)));
     gap: 0;
     margin: 0 0 3px 12px;
-    padding: 23px 22px 20px;
+    padding: 28px 22px 20px;
+  }
+
+  .operation-commodity-row .operation-field label {
+    margin-top: 16px;
+    margin-bottom: 10px;
   }
 
   .operation-commodity-number {
     justify-self: start;
-    margin-bottom: 10px;
+    margin-bottom: 4px;
   }
 
   .operation-commodity-row .operation-row-reset {
@@ -827,6 +907,36 @@
     justify-items: start;
     min-height: 0;
     padding-top: 17px;
+    padding-right: 15px;
+  }
+
+  .operation-rate .operation-volume strong {
+    color: #008000;
+  }
+
+  .operation-volume-help {
+    display: block;
+    margin-top: 8px;
+  }
+
+  .operation-volume-help summary {
+    display: grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    list-style: none;
+    border: 1px solid #333;
+    border-radius: 50%;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .operation-volume-help summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .operation-volume-help p {
+    margin: 5px 0 0;
   }
 
   .operation-rate .operation-volume .operation-field {
@@ -835,7 +945,8 @@
     gap: 5px;
     align-items: center;
     width: min(100%, 232px);
-    margin-top: 26px;
+    margin-top: 9px;
+    margin-right: 13px;
   }
 
   .operation-rate .operation-volume label {
@@ -843,7 +954,35 @@
     white-space: nowrap;
   }
 
-  .operation-rate .operation-accordion:last-of-type summary {
+  .operation-linear-control {
+    display: flex;
+    width: 148px;
+    min-width: 0;
+  }
+
+  .operation-linear-control button {
+    display: block;
+    flex: 0 0 22px;
+    padding: 0;
+    border: 0;
+    background: var(--operation-blue);
+    color: #fff;
+    font: 700 18px/1 Tahoma, Helvetica, Arial, sans-serif;
+  }
+
+  .operation-linear-control input {
+    appearance: textfield;
+    height: 33px;
+    border-color: #bbb;
+    text-align: center;
+  }
+
+  .operation-linear-control input::-webkit-inner-spin-button,
+  .operation-linear-control input::-webkit-outer-spin-button {
+    appearance: none;
+  }
+
+  .operation-rate .operation-accordion:last-of-type > summary {
     position: relative;
     display: block;
     min-height: 112px;
@@ -853,14 +992,14 @@
     background: #fff;
   }
 
-  .operation-rate .operation-accordion:last-of-type summary::after {
+  .operation-rate .operation-accordion:last-of-type > summary::after {
     position: absolute;
     right: 17px;
     bottom: 35px;
     font-size: 26px;
   }
 
-  .operation-rate .operation-accordion summary small {
+  .operation-rate .operation-accordion > summary small {
     color: #008000;
     font-size: inherit;
   }
@@ -875,6 +1014,10 @@
     width: 100%;
   }
 
+  .operation-rate .operation-button-outline {
+    border-width: 1px;
+  }
+
   .operation-tracking > form {
     padding-left: 0;
   }
@@ -887,5 +1030,11 @@
   .operation-transit .operation-actions .operation-button,
   .operation-density .operation-actions .operation-button {
     padding-inline: 25px;
+  }
+}
+
+@media (max-width: 380px) {
+  .operation-rate-discount-note {
+    min-height: 112px;
   }
 }

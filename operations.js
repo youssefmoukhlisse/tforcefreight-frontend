@@ -131,7 +131,7 @@ function operationRate() {
         ${operationDate('operation-rate-date','Shipping Date *',1)}
       </div><div class="operation-rate-grid operation-rate-discount">
         ${operationField('operation-discount','Discount','type="number" min="0" max="100" value="0"')}${operationField('operation-minimum','Floor Minimum','type="number" min="0" value="0"')}
-      </div><p class="operation-rate-note">Discount will be applied to the current TForce Freight rate tariff. Discount and Floor Minimum fields should remain blank unless contractual terms and tariffs are known.</p>
+      </div><p class="operation-rate-note operation-rate-discount-note">Discount will be applied to the current TForce Freight rate tariff. Discount and Floor Minimum fields should remain blank unless contractual terms and tariffs are known.<span class="operation-rate-mobile-guidance"> Customers with current TForce Freight pricing can <a href="${operationsOrigin}${operationsPath}Home">log in</a> to request an estimate using their agreement. TForce Freight validates the values entered.</span></p>
       <label class="operation-check"><input type="checkbox">Request Quote Number</label>
       <p class="operation-rate-note">A quote number should be requested to ensure proper billing of any promotional discount, if applicable. A quote number is not required to apply contractual discounts.</p>`, true)}
       ${operationAccordion('Commodity Information', `<p class="operation-rating-label">Rate this shipment using</p>
@@ -139,7 +139,15 @@ function operationRate() {
         <div data-operation-commodities>${operationRateRow(1, 'class')}</div>
         <button type="button" class="operation-button operation-button-outline operation-compact-button" data-operation-add-commodity>+ Add Another Commodity</button>
         <div class="operation-volume"><strong>New Service Added – TForce Freight Volume Rating</strong>
-          ${operationField('operation-linear-feet','Linear Feet','type="number" min="0" value="0"')}</div>`, true)}
+          <details class="operation-volume-help"><summary aria-label="About Linear Feet">?</summary>
+            <p>Enter the total length the shipment occupies in the trailer, measured in feet.</p></details>
+          <div class="operation-field operation-linear-feet"><label for="operation-linear-feet">Linear Feet</label>
+            <div class="operation-linear-control">
+              <button type="button" data-linear-step="-1" aria-label="Decrease linear feet">−</button>
+              <input id="operation-linear-feet" type="number" min="0" value="0">
+              <button type="button" data-linear-step="1" aria-label="Increase linear feet">+</button>
+            </div>
+          </div></div>`, true)}
       ${operationAccordion('Value Added Services <small>LTL Guaranteed (*) Eligible Services</small>', `<div class="operation-service-options">
         ${['Inside Pickup','Inside Delivery','Liftgate Pickup','Liftgate Delivery','Residential Pickup','Residential Delivery','Limited Access Pickup','Limited Access Delivery','Appointment Delivery','Protect From Freezing'].map(option => `<label class="operation-check"><input type="checkbox">${option}</label>`).join('')}
         </div>`, false)}
@@ -330,6 +338,13 @@ function operationBindRate(form) {
   const hazmat = form.querySelector('#operation-hazmat');
   const switchText = form.querySelector('[data-operation-switch]');
   hazmat.addEventListener('change', () => { switchText.textContent = hazmat.checked ? 'Yes' : 'No'; });
+  const linearFeet = form.querySelector('#operation-linear-feet');
+  form.querySelectorAll('[data-linear-step]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.linearStep === '1') linearFeet.stepUp();
+      else linearFeet.stepDown();
+    });
+  });
   form.addEventListener('reset', () => setTimeout(() => {
     renderRows(1);
     switchText.textContent = 'No';

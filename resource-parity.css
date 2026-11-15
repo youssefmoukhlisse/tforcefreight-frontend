@@ -1,0 +1,319 @@
+.information-page:is([data-information-page="UPSGroundWithFreightPricing"], [data-information-page="SmallBusinessResources"], [data-information-page="CargoClaimsInformation"], [data-information-page="FactSheet"]) .info-heading {
+  padding: 29px 0 22px;
+}
+
+.information-page:is([data-information-page="UPSGroundWithFreightPricing"], [data-information-page="SmallBusinessResources"], [data-information-page="CargoClaimsInformation"], [data-information-page="FactSheet"]) .info-breadcrumb {
+  margin: 0 0 12px 5px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.information-page:is([data-information-page="UPSGroundWithFreightPricing"], [data-information-page="SmallBusinessResources"], [data-information-page="CargoClaimsInformation"], [data-information-page="FactSheet"]) .info-breadcrumb a {
+  color: #315ea7;
+}
+
+.info-content:has(> .resource-parity) {
+  width: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.resource-parity {
+  color: #333;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.resource-inner {
+  width: min(1376px, calc(100% - 64px));
+  margin-inline: auto;
+  padding-block: 46px 122px;
+}
+
+.resource-article {
+  width: min(100%, 972px);
+}
+
+.resource-article p,
+.resource-small-intro p {
+  margin: 0 0 16px;
+}
+
+.resource-article address {
+  font-style: normal;
+}
+
+.resource-article ul,
+.resource-article ol {
+  margin: 16px 0 0;
+  padding-inline-start: 15px;
+}
+
+.resource-article li {
+  margin: 0 0 2px;
+}
+
+.resource-article p:last-child,
+.resource-article li:last-child,
+.resource-small-intro p:last-child {
+  margin-bottom: 0;
+}
+
+.resource-hero {
+  position: relative;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.resource-hero > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 1;
+  object-fit: cover;
+  object-position: center;
+}
+
+.resource-hero-caption {
+  position: absolute;
+  top: 20px;
+  left: 7.65%;
+  width: min(30%, 404px);
+  padding: 20px 20px 36px;
+  background: rgb(255 255 255 / 84%);
+}
+
+.resource-hero-caption h2 {
+  margin: 0 0 12px;
+  font: 400 30px/1.2 Georgia, 'Times New Roman', serif;
+}
+
+.resource-hero-caption p {
+  margin: 0;
+}
+
+.resource-ground section + section {
+  margin-top: 55px;
+}
+
+.resource-ground h2,
+.resource-small-intro h2,
+.resource-card-groups h2 {
+  margin: 0 0 30px;
+  font: 400 26px/1.2 Georgia, 'Times New Roman', serif;
+}
+
+.resource-parity .resource-service-note {
+  margin: 74px 0 0;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.resource-small-business .resource-inner {
+  padding-top: 70px;
+}
+
+.resource-small-intro,
+.resource-card-groups h2 {
+  color: #372018;
+}
+
+.resource-small-intro p {
+  color: #333;
+}
+
+.resource-card-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 67px 28px;
+  width: min(100%, 1160px);
+  margin: 78px 0 0;
+  padding-inline: 12px;
+}
+
+.resource-card-groups ul {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 270px);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.resource-card {
+  display: block;
+  color: #fff;
+  text-decoration: none;
+}
+
+.resource-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 270 / 123;
+  object-fit: cover;
+}
+
+.resource-card .resource-card-icon {
+  object-fit: scale-down;
+  padding: 26px;
+  background: #e3e8ed;
+}
+
+.resource-card span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 47px;
+  padding: 7px 10px;
+  background: #747474;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.08;
+}
+
+.resource-card:hover span,
+.resource-card:focus-visible span {
+  background: #0053a1;
+}
+
+.resource-small-business .resource-service-note {
+  margin-inline: 12px;
+}
+
+.resource-claims h2,
+.resource-facts h2 {
+  margin: 0 0 16px;
+  font: 700 18px/1.33 Tahoma, Arial, sans-serif;
+}
+
+.resource-claims > section + section {
+  margin-top: 30px;
+}
+
+.resource-claim-forms h2 {
+  margin-bottom: 44px;
+}
+
+.resource-form-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 36px;
+  padding: 25px 20px 38px;
+  border-top: 1px solid #888;
+  color: #212529;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.resource-form-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 40px;
+  border: 1px solid #b33128;
+  border-radius: 2px;
+  color: #b33128;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.resource-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.resource-form-actions a + a {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1px solid #333;
+  line-height: 1;
+}
+
+.resource-claims ol > li {
+  margin-bottom: 16px;
+}
+
+.resource-claims ol address {
+  margin-block: 15px 22px;
+}
+
+.resource-facts > section {
+  margin-top: 38px;
+}
+
+.resource-facts ul {
+  margin-top: 0;
+  line-height: 1.2;
+}
+
+.resource-facts li {
+  margin-bottom: 4px;
+}
+
+.resource-facts ul a {
+  color: inherit;
+}
+
+@media (max-width: 1199px) {
+  .information-page:is([data-information-page="UPSGroundWithFreightPricing"], [data-information-page="SmallBusinessResources"], [data-information-page="CargoClaimsInformation"], [data-information-page="FactSheet"]) .info-heading {
+    width: calc(100% - 24px);
+    padding: 17px 0 14px;
+  }
+
+  .resource-inner {
+    width: calc(100% - 24px);
+  }
+
+  .resource-card-groups {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 67px;
+  }
+}
+
+@media (max-width: 900px) {
+  .resource-hero-caption {
+    position: static;
+    width: auto;
+    background: #ddd;
+  }
+}
+
+@media (max-width: 767px) {
+  .information-page:is([data-information-page="UPSGroundWithFreightPricing"], [data-information-page="SmallBusinessResources"], [data-information-page="CargoClaimsInformation"], [data-information-page="FactSheet"]) .info-heading h1,
+  .resource-hero-caption h2 {
+    font-size: 24px;
+  }
+
+  .resource-inner {
+    padding-block: 36px 120px;
+  }
+
+  .resource-parity {
+    font-size: 15px;
+    line-height: 24px;
+  }
+
+  .resource-small-business .resource-inner {
+    padding-top: 62px;
+  }
+
+  .resource-card-groups ul {
+    width: 100%;
+  }
+
+  .resource-card img {
+    aspect-ratio: 2 / 1;
+  }
+
+  .resource-card span,
+  .resource-form-row {
+    font-size: 16px;
+  }
+
+  .resource-claims .resource-claim-forms {
+    margin-top: -7px;
+  }
+}

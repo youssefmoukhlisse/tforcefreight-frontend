@@ -172,6 +172,42 @@
   background: var(--panel, #ddd);
 }
 
+.preview-privacy-heading {
+  padding-block: 42px 29px;
+}
+
+.preview-privacy-heading h1,
+.preview-privacy h2 {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-weight: 400;
+}
+
+.preview-privacy-heading h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+}
+
+.preview-privacy-content {
+  padding: 66px 12px 110px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.preview-privacy-content article {
+  max-width: 970px;
+}
+
+.preview-privacy h2 {
+  margin: 0 0 20px;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.preview-privacy section + section { margin-top: 32px; }
+.preview-privacy p, .preview-privacy ul { margin: 0 0 14px; }
+.preview-privacy ul { padding-inline-start: 16px; }
+
 @media (max-width: 991px) {
   .info-contact {
     max-width: 100%;
@@ -187,6 +223,11 @@
 }
 
 @media (max-width: 767px) {
+  .preview-privacy .container { width: calc(100% - 24px); }
+  .preview-privacy-heading { padding-block: 30px 29px; }
+  .preview-privacy-heading h1 { font-size: 24px; line-height: 29px; }
+  .preview-privacy-content { padding: 47px 0 85px; font-size: 15px; }
+  .preview-privacy h2 { font-size: 29px; }
   .info-card-grid, .info-ltl, .info-resource-groups {
     grid-template-columns: minmax(0, 1fr);
   }

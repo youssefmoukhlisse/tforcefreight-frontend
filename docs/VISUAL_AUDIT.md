@@ -30,6 +30,7 @@ The default viewports are 1920×1080, 1440×900, 1024×768, 768×1024, 390×844 
 | `TFORCE_VIEWPORTS` | Comma-separated `widthxheight` values |
 | `TFORCE_AUDIT_WORKERS` | Number of concurrent screenshot pairs, defaults to 3 |
 | `TFORCE_AUDIT_STATE` | `initial`, `mobile-open`, `shipping-open`, `services-open`, `tools-open`, `myltl-open` or `first-field-focus`. Choose a viewport that exposes the requested control. |
+| `TFORCE_REFERENCE_REPORT` | Optional path to a prior initial-state `report.json` or consolidated comparison. Replays the original PNG for each route and viewport, captures the candidate again and reports the prior difference. Original PNGs must still be available. |
 
 Each case saves the full-page originals, replica screenshots, a 50/50 overlay, the mismatch image and a JSON record. Red marks a pixel difference and amber marks an area present in only one capture. The report includes viewport and screenshot dimensions, visible text digests, selected computed CSS and geometry, image failures, runtime errors and status codes. Its mismatch percentage divides the counted mismatch plus unmatched area by the union of the screenshot areas. Pixelmatch uses threshold 0.1 and ignores antialiasing differences.
 

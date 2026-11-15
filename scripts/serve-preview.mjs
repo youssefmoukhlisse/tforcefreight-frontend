@@ -4,7 +4,11 @@ import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const directory = fileURLToPath(new URL('../', import.meta.url));
-const publicFiles = new Set(['index.html', 'app.js', 'app.css', 'shell.css', 'information.js', 'information.css', 'operations.js', 'operations.css']);
+const publicFiles = new Set([
+  'index.html', 'app.js', 'app.css', 'shell.css', 'information.js', 'information.css',
+  'operations.js', 'operations.css', 'regional-parity.js', 'regional-parity.css',
+  'resource-parity.js', 'resource-parity.css',
+]);
 const types = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',

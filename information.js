@@ -239,6 +239,9 @@ function informationList(links) {
 }
 
 function informationBody(page, key) {
+  const specialized = (typeof regionalParityBody === 'function' && regionalParityBody(key, page))
+    || (typeof resourceParityBody === 'function' && resourceParityBody(key, page));
+  if (specialized) return specialized;
   if (page.body) return page.body();
   if (page.cards) return informationCards(page.cards);
   const source = informationLink(page.externalAction ?? `View ${page.title} on the official TForce Freight site`, `${informationOrigin}${informationBase}${key}`);
@@ -263,7 +266,7 @@ function informationPage(path) {
   if (parent) crumbs.push(informationLink(parent.title, page.parent));
   crumbs.push(`<span aria-current="page">${informationEscape(page.breadcrumb ?? page.title)}</span>`);
   const hero = page.hero ? `<div class="info-hero"><img src="/assets/${page.hero}" alt=""></div>` : '';
-  return `<main id="main-content" class="information-page">
+  return `<main id="main-content" class="information-page" data-information-page="${informationEscape(key)}">
     <header class="container info-heading">
       <nav aria-label="Breadcrumb" class="info-breadcrumb">${crumbs.join('<span aria-hidden="true"> &gt; </span>')}</nav>
       <h1>${title}</h1>

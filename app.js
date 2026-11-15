@@ -78,7 +78,56 @@ function pageShell(title, crumb, content) {
 }
 
 function privacyPage() {
-  return pageShell('TForce Freight Privacy Notice','',`<article class="prose"><p><a href="${OFFICIAL_SITE}/ltl/apps/TForceFreightPrivacyNotice">Read the official TForce Freight Privacy Notice</a></p><h2>Preview cookie preferences</h2><p>This preview stores only a session value when the cookie notice is dismissed and does not load analytics or advertising scripts.</p><p><a href="#cookie-settings" data-cookie-settings>Cookie Settings</a></p></article>`);
+  const notice = `${OFFICIAL_SITE}/ltl/apps/TForceFreightPrivacyNotice`;
+  const contact = OFFICIAL_SITE + CONTACT;
+  return `<main id="main-content" class="preview-privacy">
+    <header class="container preview-privacy-heading"><h1>TForce Freight Privacy Notice</h1></header>
+    <div class="container preview-privacy-content">
+      <article aria-label="Guide to the official privacy notice">
+        <section>
+          <h2>Privacy Policy</h2>
+          <p>The TForce Freight notice describes how the carrier handles personal information in connection with its website and freight services. This page is a guide to the notice. <a href="${notice}">Read the official TForce Freight Privacy Notice</a> for the complete wording and current terms.</p>
+        </section>
+        <section>
+          <h2>Personal Information</h2>
+          <p>The notice explains what it considers personal information about an identifiable person. It distinguishes that information from certain business contact details.</p>
+        </section>
+        <section>
+          <h2>Information Collection and Use</h2>
+          <p>The carrier's policy describes information associated with shipments and accounts. The types of information discussed include:</p>
+          <ul><li>Contact information for shippers and recipients.</li><li>Identity information used to confirm a person's identity.</li><li>Billing information, and optional information provided by the customer.</li></ul>
+          <p>The notice also describes how the carrier uses information for:</p>
+          <ul><li>Transporting and tracking freight, and providing shipment updates.</li><li>Customer service, account administration, and billing.</li><li>Improving its services and meeting business or legal obligations.</li></ul>
+        </section>
+        <section>
+          <h2>Disclosure of Personal Information</h2>
+          <p>The official policy describes situations in which information may be disclosed, including to companies supporting freight services, in connection with investigations, or as part of a business transfer. The full notice sets out the conditions for those disclosures.</p>
+        </section>
+        <section>
+          <h2>Knowledge and Consent</h2>
+          <p>The notice explains how the carrier handles information supplied by customers and about shipment recipients. It also describes the conditions that apply to withdrawing consent. For guidance about a specific shipment or request, use the official contact page.</p>
+        </section>
+        <section>
+          <h2>Protection and Retention</h2>
+          <p>The official policy describes the carrier's safeguards for the information it holds. It also addresses the limits of those protections for information visible on packaging or shipping labels.</p>
+          <p>The notice explains how the carrier determines the time needed to keep information, including the purpose of collection and applicable requirements.</p>
+        </section>
+        <section>
+          <h2>Changes to the Privacy Notice</h2>
+          <p>Check the <a href="${notice}">official notice</a> for the version currently published by TForce Freight.</p>
+        </section>
+        <section>
+          <h2>Access and Corrections</h2>
+          <p>The official notice directs requests to access, correct, or update personal information to the carrier's <a href="${contact}">Contact Us page</a>.</p>
+        </section>
+        <section>
+          <h2>Preview cookie preferences</h2>
+          <p>Closing the cookie notice on this demo stores a preference in your current browser session. This demo does not load analytics or advertising scripts.</p>
+          <p><a href="#cookie-settings" data-cookie-settings>Cookie Settings</a></p>
+        </section>
+      </article>
+    </div>
+  </main>`;
 }
 
 function notFoundPage() {

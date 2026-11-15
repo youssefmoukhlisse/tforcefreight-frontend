@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -77,8 +77,8 @@ function buildMatrix(report) {
     '',
     report.method,
     '',
-    '| Route | Viewport | Original (HTTP, state, image) | Replica (HTTP, state, image) | Different | Missing area (px) | Exact visible text |',
-    '| --- | --- | --- | --- | ---: | ---: | --- |',
+    '| Route | Viewport | Original (HTTP, state, image) | Replica (HTTP, state, image) | Prior difference | New difference | Missing area (px) | Exact visible text |',
+    '| --- | --- | --- | --- | ---: | ---: | ---: | --- |',
   ];
   const outcome = (result) => {
     const size = result.image ? `${result.imageWidth}×${result.imageHeight}` : '—';
@@ -88,8 +88,9 @@ function buildMatrix(report) {
     const { route, viewport, reference, candidate, comparison } = entry;
     const difference = comparison?.differencePercent;
     const score = Number.isFinite(difference) ? difference.toFixed(3) + '%' : '—';
-    const exact = comparison?.comparable ? (comparison.bodyTextExact ? 'yes' : 'no') : '—';
-    lines.push(`| \`${route}\` | ${viewport.label} | ${outcome(reference)} | ${outcome(candidate)} | ${score} | ${comparison?.unmatchedAreaPixels ?? '—'} | ${exact} |`);
+    const prior = Number.isFinite(entry.priorDifference) ? entry.priorDifference.toFixed(3) + '%' : '—';
+    const exact = typeof comparison?.bodyTextExact === 'boolean' ? (comparison.bodyTextExact ? 'yes' : 'no') : '—';
+    lines.push(`| \`${route}\` | ${viewport.label} | ${outcome(reference)} | ${outcome(candidate)} | ${prior} | ${score} | ${comparison?.unmatchedAreaPixels ?? '—'} | ${exact} |`);
   }
   return lines.join('\n') + '\n';
 }
@@ -285,9 +286,52 @@ async function compare(reference, candidate, prefix) {
     mismatchedOverlapPixels: mismatched,
     unmatchedAreaPixels: unmatchedArea,
     differencePercent: comparable ? (mismatched + unmatchedArea) * 100 / pixelsInUnion : null,
-    bodyTextExact: comparable && reference.bodyText.sha256 === candidate.bodyText.sha256,
-    mainTextExact: comparable && Boolean(reference.mainText.characters)
-      && reference.mainText.sha256 === candidate.mainText.sha256,
+    bodyTextExact: comparable && reference.bodyText?.sha256
+      ? reference.bodyText.sha256 === candidate.bodyText.sha256 : null,
+    mainTextExact: comparable && reference.mainText?.characters
+      ? reference.mainText.sha256 === candidate.mainText.sha256 : null,
+  };
+}
+
+async function loadReferenceArchive(path) {
+  if (!path) return null;
+  const source = JSON.parse(await readFile(path, 'utf8'));
+  if (!Array.isArray(source.cases)) throw new Error('The reference archive has no cases array.');
+  return new Map(source.cases.map((entry) => {
+    const viewport = typeof entry.viewport === 'string' ? entry.viewport : entry.viewport.label;
+    return [entry.route + '|' + viewport, entry];
+  }));
+}
+
+async function archivedReference(archive, route, viewport, archivePath) {
+  const entry = archive.get(route + '|' + viewport.label);
+  const assumed = entry?.reference;
+  const imagePath = assumed?.image || entry?.original;
+  const httpStatus = assumed?.httpStatus ?? entry?.originalStatus ?? null;
+  if (!entry || !imagePath || (httpStatus !== null && (httpStatus < 200 || httpStatus >= 300))
+      || (assumed && assumed.state !== 'rendered')) {
+    return { route, httpStatus, state: 'archive-unavailable' };
+  }
+  const image = resolve(dirname(archivePath), imagePath);
+  const screenshot = await readFile(image);
+  if (screenshot.length < 24 || screenshot.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    throw new Error('The reference screenshot is not a PNG: ' + image);
+  }
+  let metadata = assumed;
+  if (!metadata && image.endsWith('-original.png')) {
+    try {
+      const record = JSON.parse(await readFile(image.slice(0, -13) + '.json', 'utf8'));
+      if (record.route === route && record.viewport?.label === viewport.label && record.reference?.image === image) {
+        metadata = record.reference;
+      }
+    } catch {
+      // The composite archive can still provide a valid image without the original DOM digests.
+    }
+  }
+  return {
+    ...metadata, route, httpStatus, image, state: metadata?.state ?? 'rendered',
+    imageWidth: screenshot.readUInt32BE(16), imageHeight: screenshot.readUInt32BE(20),
+    archivedFrom: archivePath,
   };
 }
 
@@ -297,6 +341,9 @@ const auditState = process.env.TFORCE_AUDIT_STATE || 'initial';
 if (!['initial', 'first-field-focus', ...Object.keys(interactionControls)].includes(auditState)) {
   throw new Error('Unsupported audit state: ' + auditState);
 }
+const archivePath = process.env.TFORCE_REFERENCE_REPORT ? resolve(process.env.TFORCE_REFERENCE_REPORT) : null;
+if (archivePath && auditState !== 'initial') throw new Error('Reference archive replay requires the initial page state.');
+const referenceArchive = await loadReferenceArchive(archivePath);
 const viewports = (process.env.TFORCE_VIEWPORTS?.split(',') || defaultViewports).map(viewportFromLabel);
 const specifiedRoutes = process.env.TFORCE_ROUTES_FILE
   ? (await readFile(process.env.TFORCE_ROUTES_FILE, 'utf8')).split(/\r?\n/).filter((line) => line.startsWith('/'))
@@ -327,11 +374,13 @@ try {
         viewport: { width: viewport.width, height: viewport.height },
         deviceScaleFactor: 1, locale: 'en-US', colorScheme: 'light', reducedMotion: 'reduce',
       };
-      const referenceContext = await browser.newContext(settings);
+      const referenceContext = referenceArchive ? null : await browser.newContext(settings);
       const candidateContext = await browser.newContext(settings);
       try {
         const [reference, candidate] = await Promise.all([
-          capture(referenceContext, original, route, prefix + '-original.png', 'original', auditState),
+          referenceArchive
+            ? archivedReference(referenceArchive, route, viewport, archivePath)
+            : capture(referenceContext, original, route, prefix + '-original.png', 'original', auditState),
           capture(candidateContext, replica, route, prefix + '-replica.png', 'replica', auditState),
         ]);
         let comparison;
@@ -340,14 +389,15 @@ try {
         } catch (error) {
           comparison = { comparable: false, error: String(error.message).split('\n')[0] };
         }
-        const record = { route, viewport, reference, candidate, comparison };
+        const prior = referenceArchive?.get(route + '|' + viewport.label);
+        const record = { route, viewport, reference, candidate, comparison, priorDifference: prior?.differenceAfter ?? prior?.comparison?.differencePercent ?? null };
         cases.push(record);
         await writeFile(prefix + '.json', JSON.stringify(record, null, 2) + '\n');
         const difference = comparison?.differencePercent;
         console.log(route, viewport.label, reference.state, candidate.state,
           Number.isFinite(difference) ? difference.toFixed(3) + '% different' : 'not comparable');
       } finally {
-        await Promise.all([referenceContext.close(), candidateContext.close()]);
+        await Promise.all([referenceContext?.close(), candidateContext.close()]);
       }
     }
   }));
@@ -361,7 +411,9 @@ const report = {
   finishedAt: new Date().toISOString(),
   browserVersion,
   auditState,
-  method: 'Full-page Playwright PNGs, 1× scale, pixelmatch threshold 0.1 with antialiasing excluded; unmatched image area counts as different.',
+  archivePath,
+  method: (referenceArchive ? 'Original PNGs replayed from the prior audit; candidate captured again. ' : '')
+    + 'Full-page Playwright PNGs, 1× scale, pixelmatch threshold 0.1 with antialiasing excluded; unmatched image area counts as different.',
   tested: cases.length,
   comparable: cases.filter((record) => record.comparison?.comparable).length,
   cases: cases.sort((first, second) => routes.indexOf(first.route) - routes.indexOf(second.route)

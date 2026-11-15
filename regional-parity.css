@@ -1,0 +1,222 @@
+.information-page[data-information-page='Canada'] {
+  container-type: inline-size;
+}
+
+.information-page[data-information-page='Canada'] .info-content {
+  padding-top: 0;
+}
+
+.information-page[data-information-page] .regional-service {
+  width: 70.4%;
+  padding: 24px 0 12px 12px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.information-page[data-information-page='Mexico'] .regional-service {
+  width: 78.6%;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-inline: calc((100% - 100cqw) / 2);
+  padding: 15px 24px;
+  color: #fff;
+  background: #0053a1;
+  text-align: center;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice a {
+  color: #fff;
+}
+
+.information-page[data-information-page='Canada'] .regional-notice img {
+  flex: 0 0 20px;
+}
+
+.information-page[data-information-page] .regional-service p {
+  margin: 0 0 16px;
+}
+
+.information-page[data-information-page] .regional-service section + section,
+.information-page[data-information-page] .regional-service section + p:last-child {
+  margin-top: 36px;
+}
+
+.information-page[data-information-page] .regional-service h2 {
+  margin: 0 0 28px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #351c15;
+}
+
+.information-page[data-information-page] .regional-service h3 {
+  margin: 20px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.information-page[data-information-page='Mexico'] .regional-service section:first-child h2 {
+  margin-bottom: 0;
+  color: inherit;
+}
+
+.information-page[data-information-page] .regional-service li {
+  margin-bottom: 6px;
+}
+
+.information-page[data-information-page] .regional-service ul,
+.information-page[data-information-page] .regional-service ol {
+  margin: 0 0 16px;
+  padding-left: 15px;
+}
+
+.information-page[data-information-page] .regional-service .regional-map-link {
+  margin: 32px 0 40px;
+}
+
+.information-page[data-information-page] .regional-service .regional-map-link:first-child {
+  margin-top: 0;
+}
+
+.information-page[data-information-page] .regional-anchor-links {
+  display: flex;
+  flex-direction: column;
+  margin: 30px 0 16px;
+  font-size: 14px;
+}
+
+.information-page[data-information-page] .regional-table-scroll {
+  margin: 0 0 36px;
+  overflow-x: auto;
+}
+
+.information-page[data-information-page] .regional-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+  color: #212529;
+}
+
+.information-page[data-information-page] .regional-gateway-table {
+  min-width: 520px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.information-page[data-information-page] .regional-table th,
+.information-page[data-information-page] .regional-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #d8dde3;
+  border-right: 1px solid #777;
+}
+
+.information-page[data-information-page] .regional-table th:last-child,
+.information-page[data-information-page] .regional-table td:last-child {
+  border-right: 0;
+}
+
+.information-page[data-information-page] .regional-table thead {
+  background: #94a7c0;
+}
+
+.information-page[data-information-page] .regional-table tr:last-child td,
+.information-page[data-information-page] .regional-table th {
+  border-bottom-color: #777;
+}
+
+.information-page[data-information-page] .regional-sailing-table {
+  width: min(100%, 785px);
+  border: 1px solid #777;
+  font-size: 18px;
+}
+
+.information-page[data-information-page] .regional-sailing-table caption {
+  padding: 14px 20px;
+  background-color: #0053a1;
+  color: #fff;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.information-page[data-information-page] .regional-sailing-table th,
+.information-page[data-information-page] .regional-sailing-table td {
+  padding: 10px 20px;
+}
+
+.information-page[data-information-page] .regional-sailing-table th {
+  text-transform: uppercase;
+}
+
+.information-page[data-information-page] .regional-service .regional-document-list {
+  margin: 34px 0;
+  padding: 0;
+  color: #212529;
+  list-style: none;
+}
+
+.information-page[data-information-page] .regional-document-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 22px 20px;
+  border-top: 1px solid #777;
+  font-size: 18px;
+  line-height: 1.34;
+}
+
+.information-page[data-information-page] .regional-document-list li:last-child {
+  border-bottom: 1px solid #d8d8d8;
+}
+
+.information-page[data-information-page] .regional-document-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.information-page[data-information-page] .regional-document-actions a + a {
+  border-left: 1px solid currentColor;
+  padding-left: 12px;
+}
+
+@media (max-width: 991px) {
+  .information-page[data-information-page] .regional-service {
+    width: 100%;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 575px) {
+  .information-page[data-information-page='Canada'] .regional-notice {
+    padding-inline: 12px;
+  }
+
+  .information-page[data-information-page] .regional-service {
+    padding-top: 16px;
+  }
+
+  .information-page[data-information-page] .regional-sailing-table {
+    font-size: 10px;
+  }
+
+  .information-page[data-information-page] .regional-sailing-table caption {
+    font-size: 14px;
+  }
+
+  .information-page[data-information-page] .regional-sailing-table th,
+  .information-page[data-information-page] .regional-sailing-table td {
+    padding-inline: 8px;
+  }
+
+  .information-page[data-information-page] .regional-document-list li {
+    padding-inline: 4px;
+  }
+}
