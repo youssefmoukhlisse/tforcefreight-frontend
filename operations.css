@@ -717,6 +717,164 @@
 }
 
 @media (max-width: 479px) {
+  .page-main:has(.operation-rate) {
+    padding-bottom: 10px;
+  }
+
+  .page-main:has(.operation-rate) > .container {
+    width: calc(100% - 24px);
+  }
+
+  .page-main:has(.operation-rate) .breadcrumbs {
+    display: block;
+    padding: 20px 5px 0;
+    font-size: 16px;
+  }
+
+  .page-main:has(.operation-rate) .page-title {
+    margin: 15px 0 5px;
+    font-size: 24px;
+  }
+
+  .operation-rate .operation-login {
+    gap: 0;
+    min-height: 117px;
+    padding: 15px 18px;
+    text-align: center;
+    background: #0053a1;
+  }
+
+  .operation-rate .operation-login .operation-button {
+    width: 100%;
+    font-size: 18px;
+  }
+
+  .operation-rate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-rate-grid > .operation-field {
+    width: 100%;
+    max-width: 310px;
+    min-height: 76px;
+  }
+
+  .operation-rate-discount > .operation-field:first-child {
+    position: relative;
+  }
+
+  .operation-rate-discount > .operation-field:first-child::after {
+    position: absolute;
+    top: 48px;
+    left: 150px;
+    content: '%';
+  }
+
+  .operation-rate-note {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .operation-rate .operation-check input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+  }
+
+  .operation-rate .operation-tabs {
+    width: 211px;
+    margin-top: 24px;
+    margin-bottom: 20px;
+  }
+
+  .operation-rate .operation-tabs span {
+    min-height: 37px;
+    border-color: #777;
+  }
+
+  .operation-rate .operation-tabs label:first-child span {
+    border-radius: 4px 0 0 4px;
+  }
+
+  .operation-rate .operation-tabs label:last-child span {
+    border-radius: 0 4px 4px 0;
+  }
+
+  .operation-accordion-body .operation-commodity-row {
+    position: relative;
+    grid-template-columns: minmax(0, 155px);
+    gap: 0;
+    margin: 0 0 3px 12px;
+    padding: 23px 22px 20px;
+  }
+
+  .operation-commodity-number {
+    justify-self: start;
+    margin-bottom: 10px;
+  }
+
+  .operation-commodity-row .operation-row-reset {
+    position: absolute;
+    top: 18px;
+    right: 33px;
+  }
+
+  .operation-rate [data-operation-add-commodity] {
+    width: 100%;
+  }
+
+  .operation-rate .operation-volume {
+    justify-items: start;
+    min-height: 0;
+    padding-top: 17px;
+  }
+
+  .operation-rate .operation-volume .operation-field {
+    justify-self: end;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    width: min(100%, 232px);
+    margin-top: 26px;
+  }
+
+  .operation-rate .operation-volume label {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .operation-rate .operation-accordion:last-of-type summary {
+    position: relative;
+    display: block;
+    min-height: 112px;
+    padding: 36px 15px;
+    border-top: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .operation-rate .operation-accordion:last-of-type summary::after {
+    position: absolute;
+    right: 17px;
+    bottom: 35px;
+    font-size: 26px;
+  }
+
+  .operation-rate .operation-accordion summary small {
+    color: #008000;
+    font-size: inherit;
+  }
+
+  .operation-rate-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin: 25px 12px 0;
+  }
+
+  .operation-rate-actions .operation-button {
+    width: 100%;
+  }
+
   .operation-tracking > form {
     padding-left: 0;
   }
