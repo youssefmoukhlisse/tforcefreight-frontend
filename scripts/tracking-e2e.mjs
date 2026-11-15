@@ -161,7 +161,7 @@ try {
     await page.locator('#shipment-form').waitFor();
     const fixture = 'QA-' + Date.now().toString(36).toUpperCase();
     const fields = {
-      service:'QA Test — Independent LTL', bol:fixture + '-BOL', po:fixture + '-PO', reference:fixture + '-REF', pieces:1, weight:2725,
+      bol:fixture + '-BOL', po:fixture + '-PO', reference:fixture + '-REF', pieces:1, weight:2725,
       pickupDate:'2026-08-18', estimatedDeliveryDate:'2026-08-21',
       'shipFrom-company':'SYNTHETIC ORIGIN LLC', 'shipFrom-contact':'QA Sender', 'shipFrom-address':'TEST PRIVATE STREET',
       'shipFrom-city':'Atlanta', 'shipFrom-state':'GA', 'shipFrom-postalCode':'30303', 'shipFrom-email':'qa-sender@example.test',
@@ -169,6 +169,7 @@ try {
       'shipTo-city':'Columbia', 'shipTo-state':'MD', 'shipTo-postalCode':'21044', 'shipTo-email':'qa-recipient@example.test',
     };
     await fill(page, fields);
+    await page.getByLabel('Service type').selectOption('LTL');
     await page.locator('[name=shareNames]').check();
     await page.locator('[name=shareDetails]').check();
     const create = page.waitForResponse(response => response.url().endsWith('/api/admin/shipments') && response.request().method() === 'POST');
@@ -177,7 +178,8 @@ try {
     assert.equal(created.status(), 201, 'Admin created a shipment');
     const { shipment } = await created.json();
     const pro = report.pro = shipment.pro;
-    assert.match(pro, /^INT-[A-Z0-9-]+$/);
+    assert.match(pro, /^[1-9][0-9]{8}$/);
+    assert.equal(shipment.service, 'LTL');
     await page.waitForURL('**/#shipment/*/summary');
     pass('Create shipment and issue internal PRO', pro);
     const duplicate = await json(adminContext, '/api/admin/shipments', { ...shipment, pro, shipFrom:shipment.shipFrom, shipTo:shipment.shipTo });
@@ -203,14 +205,20 @@ try {
     await publicPage.getByRole('alert').getByText('Enter at least one internal PRO number.').waitFor();
     await publicPage.locator('#track-numbers').fill('not-an-internal-pro');
     await publicPage.getByRole('button',{name:'Track',exact:true}).click();
-    await publicPage.getByRole('alert').getByText(/Enter an internal number/).waitFor();
-    const unknown = 'INT-UNISSUED-' + fixture;
+    await publicPage.getByRole('alert').getByText(/Enter a 9-digit internal PRO number/).waitFor();
+    const unknown = '012345678';
     const transit = await search(publicPage,[pro,unknown]);
     assert.equal(transit.results[0].shipments[0].status,'in_transit');
     assert.equal(transit.results[1].shipments.length,0);
     const publicJSON = JSON.stringify(transit);
     for (const phrase of ['qa-recipient@example.test','TEST PRIVATE STREET','QA Recipient','QA dispatch simulation']) assert.ok(!publicJSON.includes(phrase));
     pass('Public lookup, validation, multiple PROs and redaction', 'Empty/invalid numbers rejected, unknown separated and street/contact data absent');
+    await publicPage.goto(origin + '/');
+    await publicPage.locator('#home-pro').fill(pro);
+    const homeSearch = publicPage.waitForResponse(response => response.url().endsWith('/api/tracking/search'));
+    await publicPage.locator('.track-form').getByRole('button', { name:'Track', exact:true }).click();
+    assert.equal((await (await homeSearch).json()).results[0].shipments[0].pro, pro);
+    pass('Homepage forwards 9-digit PRO', 'Tracking opens and searches the entered number');
     const show = publicPage.getByRole('button',{name:'Show Details +'});
     await show.click();
     await publicPage.getByRole('table',{name:'Shipment progress'}).waitFor();

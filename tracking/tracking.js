@@ -5,6 +5,8 @@ const form = get('track-form');
 const results = get('tracking-results');
 const notice = get('search-status');
 const output = get('track-output');
+const loading = get('track-loading');
+const trackButton = get('track-submit');
 const dialog = get('update-dialog');
 let config = { notificationsEnabled: false };
 let currentRequest;
@@ -135,13 +137,21 @@ function showError(message) {
   get('search-error').hidden = !message;
 }
 
+function setSearching(searching) {
+  loading.hidden = !searching;
+  trackButton.disabled = searching;
+  output.setAttribute('aria-busy', String(searching));
+}
+
 function searchPayload() {
   const fields = new FormData(form);
   if (fields.get('mode') === 'pro') {
     const numbers = get('track-numbers').value.split(/\r?\n/).map(line => line.trim().toUpperCase()).filter(Boolean);
     if (!numbers.length) throw new Error('Enter at least one internal PRO number.');
     if (numbers.length > 25) throw new Error('Enter up to 25 PRO numbers, one per line.');
-    if (numbers.some(number => !/^INT-[A-Z0-9][A-Z0-9-]{3,31}$/.test(number))) throw new Error('Enter an internal number beginning with INT-. Use the official carrier site for its PRO numbers.');
+    if (numbers.some(number => !/^(?:[0-9]{9}|INT-[A-Z0-9][A-Z0-9-]{3,31})$/.test(number))) {
+      throw new Error('Enter a 9-digit internal PRO number or a previously issued INT- number.');
+    }
     return { mode: 'pro', numbers: [...new Set(numbers)] };
   }
   const input = Object.fromEntries(['kind','number','fromDate','toDate','originZip','destinationZip'].map(key => [key, fields.get(key).trim()]));
@@ -152,15 +162,15 @@ function searchPayload() {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  currentRequest?.abort();
-  const request = currentRequest = new AbortController();
+  if (currentRequest) return;
   showError('');
   results.replaceChildren();
   notice.textContent = '';
   let body;
   try { body = searchPayload(); }
-  catch (error) { output.setAttribute('aria-busy', 'false'); showError(error.message); return; }
-  output.setAttribute('aria-busy', 'true');
+  catch (error) { showError(error.message); return; }
+  const request = currentRequest = new AbortController();
+  setSearching(true);
   notice.textContent = 'Searching shipment records.';
   try {
     const data = await api('/api/tracking/search', { body, signal: request.signal });
@@ -171,7 +181,10 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     if (error.name !== 'AbortError' && currentRequest === request) { showError(error.message); notice.textContent = ''; }
   } finally {
-    if (currentRequest === request) output.setAttribute('aria-busy', 'false');
+    if (currentRequest === request) {
+      currentRequest = null;
+      setSearching(false);
+    }
   }
 });
 
@@ -184,7 +197,7 @@ function syncMode() {
 function clearResults() {
   currentRequest?.abort();
   currentRequest = null;
-  output.setAttribute('aria-busy', 'false');
+  setSearching(false);
   results.replaceChildren();
   notice.textContent = '';
 }

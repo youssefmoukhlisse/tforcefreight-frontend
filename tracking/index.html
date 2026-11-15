@@ -47,11 +47,15 @@
           <p class="field-note">Use the postal codes and shipment date range from your shipment record.</p>
         </div>
         <p id="search-error" class="form-error" role="alert" hidden></p>
-        <div class="track-form-actions"><button class="primary" type="submit">Track</button><button class="secondary" type="reset">Reset</button></div>
+        <div class="track-form-actions"><button id="track-submit" class="primary" type="submit">Track</button><button class="secondary" type="reset">Reset</button></div>
         <p class="portal-disclosure">This service tracks internal shipment records only. It is not affiliated with TForce Freight and does not look up its PRO numbers.</p>
       </form>
+      <p id="search-status" role="status" class="sr-only"></p>
       <div id="track-output" class="track-output" aria-busy="false">
-        <p id="search-status" role="status" class="search-status sr-only"></p>
+        <div id="track-loading" class="track-loading" aria-hidden="true" hidden>
+          <div class="track-spinner"><span></span><span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
         <div id="tracking-results"></div>
       </div>
     </div>

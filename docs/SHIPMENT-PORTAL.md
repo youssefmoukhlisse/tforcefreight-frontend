@@ -1,6 +1,6 @@
 # Independent shipment portal
 
-The staged application uses Node 24, Express, vanilla HTML/CSS/JavaScript and PostgreSQL. It shares the repository and Railway project with the existing informational frontend; the staged database is isolated from production. Shipment numbers are internal IDs in the `INT-` namespace. App status and timeline come from database records and never use reference screenshot data.
+The staged application uses Node 24, Express, vanilla HTML/CSS/JavaScript and PostgreSQL. It shares the repository and Railway project with the existing informational frontend; the staged database is isolated from production. New shipment numbers are nine-digit internal IDs. Previously issued `INT-` numbers still work for tracking. App status and timeline come from database records and never use reference screenshot data.
 
 ## Staging and first sign-in
 

@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 
 export const shipmentStatuses = Object.freeze([
@@ -8,7 +8,8 @@ export const shipmentStatuses = Object.freeze([
 ]);
 
 const uuidPattern = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
-const proPattern = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
+const numericProPattern = /^[0-9]{9}$/;
+const legacyProPattern = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
 const referenceColumns = Object.freeze({ bol: 'bol', po: 'po', reference: 'reference' });
 const maxDocumentBytes = 2 * 1024 * 1024;
 const timelineOrder = 'occurred_at DESC, created_at DESC, id DESC';
@@ -136,17 +137,25 @@ function shipmentDraft(value) {
 }
 
 function manualPro(value) {
-  const input = text(value, 'PRO number', 36).toUpperCase();
+  const input = text(value, 'PRO number', 36);
   if (!input) return null;
-  const number = input.startsWith('INT-') ? input : `INT-${input}`;
-  if (!proPattern.test(number)) fail(400, 'A manual PRO number must have 4 to 32 letters, digits or hyphens after INT-.');
-  return number;
+  if (!numericProPattern.test(input)) fail(400, 'A new PRO number must contain exactly 9 digits.');
+  return input;
+}
+
+export function isTrackingPro(value) {
+  return typeof value === 'string' && (numericProPattern.test(value) || legacyProPattern.test(value));
 }
 
 function searchPro(value) {
   const number = text(value, 'PRO number', 36, true).toUpperCase();
-  if (!proPattern.test(number)) fail(400, 'Enter a valid PRO number beginning with INT-.');
+  if (!isTrackingPro(number)) fail(400, 'Enter a 9-digit internal PRO number or an existing number beginning with INT-.');
   return number;
+}
+
+function matchesIssuedPro(value, issued) {
+  const number = text(value, 'PRO number', 36).toUpperCase();
+  return number === issued || (legacyProPattern.test(issued) && `INT-${number}` === issued);
 }
 
 function utcOffset(minutes) {
@@ -307,14 +316,15 @@ async function lockShipment(client, shipmentId, version) {
 }
 
 async function issuePro(client, shipmentId, requested) {
-  for (let attempt = 0; attempt < (requested ? 1 : 4); attempt++) {
-    const number = requested || `INT-${randomBytes(12).toString('hex').toUpperCase()}`;
+  const attempts = requested ? 1 : 16;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const number = requested || String(randomInt(100_000_000, 1_000_000_000));
     const result = await client.query(`INSERT INTO tracking_numbers (pro_number, shipment_id, issuance)
       VALUES ($1,$2,$3) ON CONFLICT (pro_number) DO NOTHING`, [number, shipmentId, requested ? 'manual' : 'automatic']);
     if (result.rowCount) return number;
   }
   if (requested) fail(409, 'That PRO number has already been issued.');
-  throw new Error('Could not issue an internal PRO number.');
+  fail(503, 'A unique PRO number could not be issued. Try again.');
 }
 
 async function writeParty(client, shipmentId, kind, party) {
@@ -476,7 +486,9 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
     const shipment = await transaction(pool, async client => {
       await lockShipment(client, shipmentId, body.version);
       const previous = await getShipment(client, shipmentId);
-      if (Object.hasOwn(body, 'pro') && manualPro(body.pro) !== previous.pro) fail(400, 'An issued PRO number is permanent.');
+      if (Object.hasOwn(body, 'pro') && !matchesIssuedPro(body.pro, previous.pro)) {
+        fail(400, 'An issued PRO number is permanent.');
+      }
       if (Object.hasOwn(body, 'status') && body.status !== previous.status) {
         fail(400, 'Record a confirmed tracking event to change a shipment status.');
       }

@@ -268,7 +268,7 @@ function operationalSubmit(event) {
   if (event.currentTarget.matches('.track-form')) {
     const input = event.currentTarget.querySelector('textarea');
     const numbers = input.value.trim().toUpperCase().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    if (numbers.length <= 25 && numbers.length && numbers.every(number => /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/.test(number))) {
+    if (numbers.length <= 25 && numbers.length && numbers.every(number => /^(?:[0-9]{9}|INT-[A-Z0-9][A-Z0-9-]{3,31})$/.test(number))) {
       try { sessionStorage.setItem('independent-tracking-search', numbers.join('\n')); } catch {}
     }
     location.assign('/ltl/apps/Tracking');

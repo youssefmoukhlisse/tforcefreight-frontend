@@ -2,11 +2,11 @@ import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import express from 'express';
 import nodemailer from 'nodemailer';
 import { withTransaction } from './database.mjs';
+import { isTrackingPro } from './shipments.mjs';
 
 const accepted = 'If the address is eligible, a confirmation link will be sent.';
 const statuses = new Map([['out_for_delivery', 'Out for delivery'], ['delivered', 'Delivered'], ['delivery_exception', 'Delivery exception']]);
 const emailFormat = /^[^\s@<>,;:"\\]+@[^\s@<>,;:"\\]+\.[^\s@<>,;:"\\]+$/;
-const proFormat = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
 const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 const uuidFormat = new RegExp('^' + uuid + '$');
 const tokenFormat = new RegExp(`^(${uuid})\\.([1-9]\\d{0,9})\\.([A-Za-z0-9_-]{43})$`);
@@ -55,7 +55,7 @@ export function createNotifications({ pool, requireRole, audit, appOrigin, envir
     if (!transport) return res.status(503).json({ error: 'Email updates are not configured.' });
     const pro = typeof req.body?.pro === 'string' ? req.body.pro.trim().toUpperCase() : '';
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    if (!proFormat.test(pro) || email.length > 254 || !emailFormat.test(email)) {
+    if (!isTrackingPro(pro) || email.length > 254 || !emailFormat.test(email)) {
       return res.status(400).json({ error: 'Enter a valid shipment number and email address.' });
     }
     await withTransaction(pool, async client => {

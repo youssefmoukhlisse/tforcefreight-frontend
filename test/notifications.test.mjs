@@ -33,7 +33,7 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   });
   await database.query('CREATE SCHEMA ' + schema);
   pool = new pg.Pool({ connectionString: dbUrl, options: '-c search_path=' + schema });
-  for (const file of ['001-auth.sql', '002-shipments.sql', '003-notifications.sql']) {
+  for (const file of ['001-auth.sql', '002-shipments.sql', '003-notifications.sql', '004-numeric-tracking-numbers.sql']) {
     await pool.query(await readFile(new URL('../server/migrations/' + file, import.meta.url), 'utf8'));
   }
 
@@ -106,7 +106,7 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   const sender = 'sender@example.invalid';
   const service = 'Staging test freight';
   const created = await request('/api/admin/shipments', {
-    pro: 'NOTIFY-QA', service, pieces: 1, weight: 100, weightUnit: 'lb', pickupDate: '2024-04-12',
+    pro: '000000123', service, pieces: 1, weight: 100, weightUnit: 'lb', pickupDate: '2024-04-12',
     bol: 'PRIVATE-BILL-TEST', instructions: 'Private instructions',
     shipFrom: { company: 'Private sender company', city: 'Albany', state: 'NY', postalCode: '12207', country: 'US', email: sender },
     shipTo: { company: 'Private recipient company', address: 'Private recipient street', city: 'Boston', state: 'MA',
@@ -120,7 +120,8 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   const confirmation = code => request(`${subscriptionsPath}/confirm`, { token: code });
   const unsubscribe = code => request(`${subscriptionsPath}/unsubscribe`, { token: code });
   const matching = await Promise.all([
-    subscribe(recipient), subscribe(recipient.toUpperCase()), subscribe('unrelated@example.invalid'), subscribe(recipient, 'INT-UNKNOWN'),
+    subscribe(recipient), subscribe(recipient.toUpperCase()), subscribe('unrelated@example.invalid'),
+    subscribe(recipient, '000000124'), subscribe(recipient, 'INT-UNKNOWN'),
   ]);
   assert.ok(matching.every(reply => reply.status === 202));
   for (const reply of matching) assert.deepEqual(reply.body, matching[0].body);
@@ -159,7 +160,7 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   const statusMessage = await waitFor(() => sent[1]);
   assert.equal(statusMessage.to, recipient);
   assert.equal(statusMessage.subject, 'Shipment update: Delivery exception');
-  assert.match(statusMessage.text, /INT-NOTIFY-QA/);
+  assert.match(statusMessage.text, /000000123/);
   assert.doesNotMatch(statusMessage.text, /private|example\.invalid@|555-0100|02108|12207|recipient@|sender@/i);
   assert.equal((await pool.query('SELECT count(*)::int AS total FROM notification_logs')).rows[0].total, 2);
   const unsubscribeToken = token(statusMessage, 'unsubscribe');

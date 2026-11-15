@@ -1,6 +1,6 @@
 # Freight frontend reconstruction and independent shipment portal
 
-The existing freight information frontend is retained. The independent shipment portal issues its own `INT-` tracking numbers, reads and writes its own PostgreSQL data, and does not connect to the TForce Freight network. The new workflows do not submit pickups or obtain freight quotes.
+The existing freight information frontend is retained. The independent shipment portal issues its own nine-digit tracking numbers and accepts previously issued `INT-` numbers. It reads and writes its own PostgreSQL data and does not connect to the TForce Freight network. The new workflows do not submit pickups or obtain freight quotes.
 
 ## Application and local preview
 

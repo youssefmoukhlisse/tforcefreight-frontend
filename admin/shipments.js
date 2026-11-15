@@ -164,6 +164,12 @@ const partyFields = [
   ['phone', 'Phone', { type: 'tel', maxlength: 48 }],
   ['email', 'Email', { type: 'email', maxlength: 254 }],
 ];
+const serviceTypes = [
+  ['LTL', 'Less than truckload (LTL)'],
+  ['FTL', 'Full truckload (FTL)'],
+  ['Expedited', 'Expedited'],
+  ['Parcel', 'Parcel'],
+];
 
 function partyForm(prefix, values) {
   const party = values || {};
@@ -188,6 +194,18 @@ function partyValues(values, prefix) {
   return party;
 }
 
+function serviceTypeField(selected) {
+  const options = [...serviceTypes];
+  if (selected && !options.some(([value]) => value === selected)) options.unshift([selected, selected]);
+  return `<div class="field">
+    <label for="service">Service type <span aria-hidden="true">*</span></label>
+    <select id="service" name="service" required>
+      <option value="" disabled${selected ? '' : ' selected'}>Select a service type</option>
+      ${options.map(([value, label]) => `<option value="${html(value)}"${selected === value ? ' selected' : ''}>${html(label)}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
 function shipmentForm(shipment) {
   const item = shipment || {};
   const sharedNotes = [
@@ -197,8 +215,11 @@ function shipmentForm(shipment) {
   return `<form id="shipment-form">
     ${section('Shipment Information', `<div class="fields">
       ${shipment ? `<div class="field"><span class="field-label">Internal PRO number</span><div><span class="chip">${html(item.pro)}</span></div></div>` :
-      field('pro', 'Internal PRO number', '', { maxlength: 36, placeholder: 'Automatically generated if blank', hint: 'Manual numbers use 4–32 letters, digits or hyphens after INT-.' })}
-      ${field('service', 'Service type', item.service, { required: true, maxlength: 100 })}
+      field('pro', 'Internal PRO number', '', {
+        inputmode: 'numeric', pattern: '[0-9]{9}', autocomplete: 'off',
+        hint: 'Enter 9 digits or leave blank to generate a number automatically.',
+      })}
+      ${serviceTypeField(item.service)}
       ${field('bol', 'Bill of lading number', item.bol, { maxlength: 100 })}
       ${field('po', 'PO number', item.po, { maxlength: 100 })}
       ${field('reference', 'Reference number', item.reference, { maxlength: 100 })}
