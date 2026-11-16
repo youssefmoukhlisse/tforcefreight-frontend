@@ -114,7 +114,7 @@ body { line-height: 16px; -webkit-font-smoothing: auto; }
   .alert-inner { --rail-width: 1005px; }
   .header-shell { height: 165px; }
   .brand { top: 47px; left: 31px; width: 301px; }
-  .desktop-nav { left: 335px; bottom: 33px; gap: clamp(9px, calc(13.25vw - 150px), 19.6px); }
+  .desktop-nav { left: 335px; bottom: 33px; gap: clamp(7px, calc(13.25vw - 152px), 19.6px); }
   .search-trigger { top: 59px; right: 85px; }
   .customer-service { right: 21px; bottom: 25px; }
   .track-card { top: 0; width: 344px; }

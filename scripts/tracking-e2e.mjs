@@ -286,7 +286,7 @@ try {
     await publicPage.getByRole('button',{name:'Show Details +'}).click();
     await snapshot(publicPage,'tracking-reference-layout-expanded');
     report.geometry = await publicPage.evaluate(() => Object.fromEntries(
-      ['.portal','.track-switch','#track-numbers','.result-group>summary','.shipment>summary','.progress-rail','.panel-title','.progress-table table'].map(selector => {
+      ['.site-header','.track-switch','#track-numbers','.result-group>summary','.shipment>summary','.progress-rail','.panel-title','.progress-table table'].map(selector => {
         const node = document.querySelector(selector), box = node.getBoundingClientRect(), styles = getComputedStyle(node);
         return [selector, {x:box.x,y:box.y,w:box.width,h:box.height,background:styles.backgroundColor,font:styles.fontFamily}];
       })));
