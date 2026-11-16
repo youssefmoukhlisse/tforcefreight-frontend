@@ -1,7 +1,6 @@
 const A = '/assets/';
 const OFFICIAL_SITE = 'https://www.tforcefreight.com';
 const OFFICIAL_HOME = OFFICIAL_SITE + '/ltl/apps/Home';
-const OFFICIAL_TRACKING = OFFICIAL_SITE + '/ltl/apps/Tracking';
 const CONTACT = '/ltl/apps/ContactUs';
 const CAREERS = 'https://efjm.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/TForceFreight';
 const dismissedAlerts = new Set();
@@ -39,7 +38,7 @@ function navLink(label, href, attributes = '') {
   return `<a ${href.startsWith('/') ? 'data-route ' : ''}href="${href}" ${attributes}>${label}</a>`;
 }
 
-function navMarkup(mobile = false, independent = false) {
+function navMarkup(mobile = false) {
   const prefix = mobile ? 'compact' : 'desktop';
   const groups = navGroups.map((group, i) => {
     if (group.href) return navLink(group.label, group.href);
@@ -48,22 +47,11 @@ function navMarkup(mobile = false, independent = false) {
     const submenu = group.lock ? `<div><strong>Less Than Truckload</strong>${links(group.items.slice(0,7))}</div><div><strong>UPS Ground with Freight Pricing</strong>${links(group.items.slice(7))}</div>` : links(group.items);
     return `<div class="${mobile ? 'mobile-group' : 'nav-item'}"><button type="button" class="nav-button${group.lock ? ' lock' : ''}" aria-expanded="false" aria-controls="${id}" ${mobile ? 'data-mobile-group' : 'data-nav-group'}="${i}">${group.label}</button><div id="${id}" class="${mobile ? 'mobile-submenu' : 'dropdown'}${group.wide ? ' wide' : ''}${group.lock ? ' locked-menu' : ''}">${submenu}</div></div>`;
   }).join('');
-  const mobileUtilities = independent
-    ? navLink('Official TForce Freight tracking', OFFICIAL_TRACKING, 'rel="noreferrer"')
-    : navLink('Log in','/ltl/apps/MyLTL') + navLink('Sign Up','/ltl/apps/MyLTLSignup');
-  return groups + navLink('About Us','/ltl/apps/AboutUs') + navLink('Careers',CAREERS) + (mobile ? navLink('Customer Service',CONTACT) + mobileUtilities : '');
+  return groups + navLink('About Us','/ltl/apps/AboutUs') + navLink('Careers',CAREERS) + (mobile ? navLink('Customer Service',CONTACT) + navLink('Log in','/ltl/apps/MyLTL') + navLink('Sign Up','/ltl/apps/MyLTLSignup') : '');
 }
 
-function header({showAlerts = false, independent = false} = {}) {
-  const className = independent ? 'site-header independent-header' : 'site-header';
-  const brand = independent
-    ? '<a class="brand portal-brand" href="/ltl/apps/Home"><span class="portal-mark" aria-hidden="true">↗</span><span>Independent<br>Shipment Portal</span></a>'
-    : '<a class="brand" data-route href="/ltl/apps/Home">TForce Freight Home</a>';
-  const utilities = independent
-    ? navLink('Official TForce Freight tracking ↗', OFFICIAL_TRACKING, 'rel="noreferrer"')
-    : `${showAlerts ? '<button type="button" data-alert-toggle aria-controls="site-alerts">Alerts</button>' : ''}<a class="login-link" data-route href="/ltl/apps/MyLTL">Log in</a><a data-route href="/ltl/apps/MyLTLSignup">Sign Up</a>`;
-  const environment = independent ? '<span id="environment-badge" class="environment" hidden>STAGING · TEST DATA</span>' : '';
-  return `${showAlerts ? alerts() : ''}<header class="${className}"><div class="header-shell">${brand}<nav class="utility-nav" aria-label="Utilities Menu">${utilities}</nav>${environment}<button type="button" class="search-trigger" aria-expanded="false" aria-controls="site-search-panel">Search</button><nav class="desktop-nav" aria-label="Primary">${navMarkup()}</nav><a class="customer-service" data-route href="${CONTACT}">Customer Service</a><div class="mobile-actions"><button type="button" class="mobile-search" aria-label="Search" aria-expanded="false" aria-controls="site-search-panel"></button><button type="button" class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobile-navigation"></button></div><nav id="mobile-navigation" class="mobile-menu" aria-label="Mobile navigation">${navMarkup(true, independent)}</nav></div><div id="site-search-panel" class="search-panel"><form class="search-row" action="/ltl/apps/SearchResults" data-search-form><label class="sr-only" for="site-search">Search</label><input id="site-search" name="q" type="search" placeholder="Search" required><button>Search</button></form></div></header>`;
+function header({showAlerts = false} = {}) {
+  return `${showAlerts ? alerts() : ''}<header class="site-header"><div class="header-shell"><a class="brand" data-route href="/ltl/apps/Home">TForce Freight Home</a><nav class="utility-nav" aria-label="Utilities Menu">${showAlerts ? '<button type="button" data-alert-toggle aria-controls="site-alerts">Alerts</button>' : ''}<a class="login-link" data-route href="/ltl/apps/MyLTL">Log in</a><a data-route href="/ltl/apps/MyLTLSignup">Sign Up</a></nav><button type="button" class="search-trigger" aria-expanded="false" aria-controls="site-search-panel">Search</button><nav class="desktop-nav" aria-label="Primary">${navMarkup()}</nav><a class="customer-service" data-route href="${CONTACT}">Customer Service</a><div class="mobile-actions"><button type="button" class="mobile-search" aria-label="Search" aria-expanded="false" aria-controls="site-search-panel"></button><button type="button" class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobile-navigation"></button></div><nav id="mobile-navigation" class="mobile-menu" aria-label="Mobile navigation">${navMarkup(true)}</nav></div><div id="site-search-panel" class="search-panel"><form class="search-row" action="/ltl/apps/SearchResults" data-search-form><label class="sr-only" for="site-search">Search</label><input id="site-search" name="q" type="search" placeholder="Search" required><button>Search</button></form></div></header>`;
 }
 
 function footer() {
@@ -322,7 +310,7 @@ document.addEventListener('keydown', event => {
 
 const portalHeader = document.getElementById('portal-site-header');
 if (portalHeader) {
-  portalHeader.innerHTML = header({independent: true});
+  portalHeader.innerHTML = header();
   bindHeaderControls();
 } else {
   window.addEventListener('popstate', () => render());

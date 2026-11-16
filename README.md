@@ -23,4 +23,4 @@ Run `pnpm test` and use the PostgreSQL integration test settings described in [t
 
 ## Rights and integration note
 
-The information preview retains previously bundled reference assets. Public tracking and shipment updates use the shared site navigation with the Independent Shipment Portal wordmark. Authorization to reuse the carrier logo on the portal has not been established. See the [TFI International terms of use](https://www.tfiintl.com/en/terms-of-use/). Enter carrier-issued numbers only on the carrier's own tracking site.
+The public tracking and shipment updates pages reuse the homepage header and its bundled TForce Freight logo. The project owner confirmed permission for this use. Tracking results come from the Independent Shipment Portal. Enter carrier-issued numbers only on the carrier's own tracking site.

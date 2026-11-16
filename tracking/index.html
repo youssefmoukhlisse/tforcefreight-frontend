@@ -15,7 +15,7 @@
   <a class="skip" href="#tracking">Skip to shipment tracking</a>
   <div id="portal-site-header"></div>
   <main id="tracking" class="page">
-    <nav class="crumb" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">&gt;</span><span aria-current="page">Tracking</span></nav>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">&gt;</span><span aria-current="page">Tracking</span><span id="environment-badge" class="environment" hidden>STAGING · TEST DATA</span></nav>
     <h1>Tracking</h1>
     <h2 class="intro">Track the status of your shipment by PRO or reference number.</h2>
     <div class="workspace">
@@ -45,7 +45,7 @@
         </div>
         <p id="search-error" class="form-error" role="alert" hidden></p>
         <div class="track-form-actions"><button id="track-submit" class="primary" type="submit">Track</button><button class="secondary" type="reset">Reset</button></div>
-        <p class="portal-disclosure">This service tracks internal shipment records only. It is not affiliated with TForce Freight and does not look up its PRO numbers.</p>
+        <p class="portal-disclosure">The Independent Shipment Portal shows internal shipment records. For a carrier-issued PRO, use <a href="https://www.tforcefreight.com/ltl/apps/Tracking" rel="noreferrer">official TForce Freight tracking</a>.</p>
       </form>
       <p id="search-status" role="status" class="sr-only"></p>
       <div id="track-output" class="track-output" aria-busy="false">
