@@ -29,6 +29,28 @@
   margin-top: 14px;
 }
 
+.shipment-progress-import .progress-import-file {
+  max-width: 550px;
+}
+.shipment-progress-import [data-progress-status][aria-pressed="true"] {
+  color: #fff;
+  background: #a32925;
+  border-color: #a32925;
+}
+.shipment-progress-import #shipment-progress-output {
+  margin-top: 19px;
+}
+.shipment-progress-import #shipment-progress-output .table-wrap {
+  max-height: 460px;
+}
+.shipment-progress-import #shipment-progress-output th {
+  position: sticky;
+  top: 0;
+}
+.shipment-progress-import #shipment-progress-output .feedback + .table-wrap {
+  margin-top: 14px;
+}
+
 @media (max-width: 540px) {
   .shipment-import .shipment-import-picker {
     grid-template-columns: minmax(0, 1fr);

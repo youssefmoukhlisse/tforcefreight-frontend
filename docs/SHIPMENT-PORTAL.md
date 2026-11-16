@@ -17,6 +17,8 @@ Use **Customers → Import Customers** to download a CSV template, preview up to
 
 Use **Tracking Numbers → Import Shipment CSV** for up to 100 shipments per file. Download the template, enter the shipment details, and preview the file before creating the shipment records. A successful import adds a unique nine-digit PRO for every row. **Download CSV with Tracking** returns the source columns in the original order with `pro_number` and `tracking_url` appended. Extra CSV columns are carried into the download and do not affect shipment creation. If the response is interrupted, preview and submit the same unchanged file again in the same browser tab to recover the original results.
 
+Use **Tracking Numbers → Update Progress from CSV** with the exported shipment CSV or the progress template. Select a confirmed status and enter its actual time, source and location for the batch. Nonblank `event_*` columns in the file override the corresponding batch fields, so one file can include both **Out for Delivery** and **Delivery Attempt Failed**. Include each shipment once per file. If a row is invalid or its PRO cannot be found, correct it before any events are saved.
+
 ## Database and privacy
 
 - `users`, `auth_sessions`, `auth_challenges`, `auth_password_resets`, `auth_recovery_codes`, `auth_rate_limits`, and `audit_logs` hold auth state and administrative history. Passwords are salted scrypt hashes; TOTP secrets are encrypted. Login and public lookup carry database-backed limits.
@@ -36,6 +38,7 @@ Use **Tracking Numbers → Import Shipment CSV** for up to 100 shipments per fil
 | Accounts | `GET, POST /api/auth/users`; `PATCH /api/auth/users/:id`; `POST /api/auth/users/:id/reset` |
 | Shipment admin | `GET /api/admin/stats`; `GET, POST /api/admin/shipments`; `GET, PATCH /api/admin/shipments/:id` |
 | Bulk shipment import | `POST /api/admin/shipments/bulk` (1–100 shipments with one retry ID per import) |
+| Bulk progress updates | `POST /api/admin/shipments/events/bulk` (1–100 confirmed events with one retry ID per batch) |
 | Shipment events and PDFs | `GET, POST /api/admin/shipments/:id/events` and `/documents`; `PATCH, DELETE /api/admin/shipments/:id/events/:eventId`; `GET, DELETE /api/admin/shipments/:id/documents/:documentId` |
 | Customers | `GET /api/admin/customers` (shipment contacts), `GET /api/admin/customers/imported`, `POST /api/admin/customers/import` |
 | Admin records | `GET /api/admin/audit`, `/notifications`; `PATCH /api/admin/notifications/:id` |

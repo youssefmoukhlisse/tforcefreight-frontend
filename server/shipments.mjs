@@ -13,6 +13,7 @@ const legacyProPattern = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
 const referenceColumns = Object.freeze({ bol: 'bol', po: 'po', reference: 'reference' });
 const poPrefix = 'CA01226';
 const maxBulkShipments = 100;
+const maxBulkEvents = 100;
 const maxDocumentBytes = 2 * 1024 * 1024;
 const timelineOrder = 'occurred_at DESC, created_at DESC, id DESC';
 
@@ -244,10 +245,51 @@ function eventDraft(value) {
   };
 }
 
+function bulkEventDraft(value) {
+  const body = object(value, 'Tracking event');
+  const pro = searchPro(body.pro);
+  const kind = body.kind ?? 'confirmed';
+  if (kind !== 'confirmed') fail(400, 'Progress imports require a confirmed event.');
+  if (body.status === 'created') fail(400, 'Choose a progress status other than Shipment created.');
+  return { pro, draft: eventDraft({ ...body, kind }) };
+}
+
+function validateImportRows(input, prepare) {
+  const rows = [];
+  const errors = [];
+  for (const [index, value] of input.entries()) {
+    try {
+      rows.push(prepare(value));
+    } catch (error) {
+      if (!error.expose || error.status !== 400) throw error;
+      errors.push({ row: index + 1, message: error.message });
+    }
+  }
+  return { rows, errors };
+}
+
+async function resolveBulkEventTargets(client, input) {
+  const { rows } = await client.query(`SELECT pro_number, shipment_id FROM tracking_numbers
+    WHERE pro_number=ANY($1::text[])`, [input.map(item => item.pro)]);
+  const byPro = new Map(rows.map(row => [row.pro_number, row.shipment_id]));
+  const firstRow = new Map();
+  const errors = [];
+  const events = input.map((item, index) => {
+    const row = index + 1;
+    const shipmentId = byPro.get(item.pro);
+    if (!shipmentId) errors.push({ row, message: 'No shipment has this PRO number.' });
+    else if (firstRow.has(shipmentId)) {
+      errors.push({ row, message: `This shipment already has an update on row ${firstRow.get(shipmentId)}. Use one update per shipment.` });
+    } else firstRow.set(shipmentId, row);
+    return { row, ...item, shipmentId };
+  });
+  return { events, errors };
+}
+
 async function transaction(pool, task, readOnly = false) {
   const client = await pool.connect();
   try {
-    await client.query(readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN');
+    await client.query(readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN ISOLATION LEVEL READ COMMITTED');
     const result = await task(client);
     await client.query('COMMIT');
     return result;
@@ -472,6 +514,23 @@ async function currentEvent(client, shipmentId) {
   return rows[0] || null;
 }
 
+async function insertTrackingEvent(client, shipment, draft, { actorId, audit, onConfirmedEvent }) {
+  const { rows: [row] } = await client.query(`INSERT INTO tracking_events (status, kind, location, city, state,
+    country, occurred_at, event_date, event_time, time_zone, utc_offset, source, trailer, notes,
+    signed_by, delivery_notes, shipment_id, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+    $13,$14,$15,$16,$17,$18) RETURNING ${eventDateSelection}`, [...eventValues(draft), shipment.id, actorId]);
+  const event = mapEvent(row);
+  const latest = await currentEvent(client, shipment.id);
+  const nextStatus = latest?.status ?? 'created';
+  await bumpShipment(client, shipment.id, nextStatus);
+  await audit(client, { actorId, action: 'event.created', targetType: 'tracking_event', targetId: event.id,
+    metadata: { shipmentId: shipment.id, status: event.status, kind: event.kind, occurredAt: event.occurredAt } });
+  if (latest?.id === event.id && nextStatus !== shipment.status) {
+    await onConfirmedEvent?.(client, { shipmentId: shipment.id, eventId: event.id, status: nextStatus });
+  }
+  return event;
+}
+
 async function fetchEvent(client, shipmentId, eventId) {
   const { rows } = await client.query(`SELECT ${eventDateSelection} FROM tracking_events
     WHERE shipment_id=$1 AND id=$2 AND deleted_at IS NULL`, [shipmentId, eventId]);
@@ -568,16 +627,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
       return res.status(400).json({ error: `Include between 1 and ${maxBulkShipments} shipments.` });
     }
 
-    const prepared = [];
-    const errors = [];
-    for (const [index, body] of rows.entries()) {
-      try {
-        prepared.push(prepareShipmentCreation(body, true));
-      } catch (error) {
-        if (!error.expose || error.status !== 400) throw error;
-        errors.push({ row: index + 1, message: error.message });
-      }
-    }
+    const { rows: prepared, errors } = validateImportRows(rows, body => prepareShipmentCreation(body, true));
     if (errors.length) return res.status(400).json({ error: 'Correct the invalid shipment rows before importing.', errors });
 
     const actorId = req.user.id;
@@ -664,6 +714,54 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
     res.json({ events });
   });
 
+  router.post('/shipments/events/bulk', editShipment, async (req, res) => {
+    const importId = req.body?.importId;
+    const input = req.body?.events;
+    if (typeof importId !== 'string' || !uuidPattern.test(importId)) {
+      return res.status(400).json({ error: 'Provide a valid progress import ID.' });
+    }
+    if (!Array.isArray(input) || !input.length || input.length > maxBulkEvents) {
+      return res.status(400).json({ error: `Include between 1 and ${maxBulkEvents} progress updates.` });
+    }
+    const { rows: prepared, errors } = validateImportRows(input, bulkEventDraft);
+    if (errors.length) return res.status(400).json({ error: 'Correct the invalid progress rows before importing.', errors });
+
+    const actorId = req.user.id;
+    const canonicalId = importId.toLowerCase();
+    const hash = createHash('sha256').update(JSON.stringify(prepared)).digest('hex');
+    const result = await transaction(pool, async client => {
+      await client.query('SELECT pg_advisory_xact_lock(725464303, hashtext($1))', [`${actorId}:${canonicalId}`]);
+      const { rows: [previous] } = await client.query(`SELECT request_hash, receipts FROM shipment_event_imports
+        WHERE actor_id=$1 AND import_id=$2`, [actorId, canonicalId]);
+      if (previous) {
+        if (previous.request_hash !== hash) fail(409, 'This import ID was already used for different progress rows.');
+        return { replayed: true, events: previous.receipts };
+      }
+
+      const matched = await resolveBulkEventTargets(client, prepared);
+      if (matched.errors.length) return { errors: matched.errors };
+      // Concurrent imports take overlapping shipment locks in one order, regardless of CSV row order.
+      const { rows: locked } = await client.query(`SELECT id,status FROM shipments
+        WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [matched.events.map(item => item.shipmentId)]);
+      const shipments = new Map(locked.map(shipment => [shipment.id, shipment]));
+      const events = [];
+      for (const { row, pro, shipmentId, draft } of matched.events) {
+        const shipment = shipments.get(shipmentId);
+        if (!shipment) fail(409, 'A shipment changed. Review the progress updates before importing again.');
+        const event = await insertTrackingEvent(client, shipment, draft, { actorId, audit, onConfirmedEvent });
+        events.push({ row, pro, shipmentId, eventId: event.id, status: event.status });
+      }
+
+      await client.query(`INSERT INTO shipment_event_imports (actor_id, import_id, request_hash, receipts)
+        VALUES ($1, $2, $3, $4::jsonb)`, [actorId, canonicalId, hash, JSON.stringify(events)]);
+      await audit(client, { actorId, action: 'events.imported', targetType: 'shipment_event_import', targetId: canonicalId,
+        metadata: { total: events.length } });
+      return { replayed: false, events };
+    });
+    if (result.errors) return res.status(400).json({ error: 'Correct the invalid progress rows before importing.', errors: result.errors });
+    res.status(result.replayed ? 200 : 201).json({ importId: canonicalId, total: result.events.length, ...result });
+  });
+
   function eventMutation(action) {
     return async (req, res) => {
       const shipmentId = id(req.params.id);
@@ -671,31 +769,26 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
       const eventId = action === 'created' ? null : id(req.params.eventId);
       const result = await transaction(pool, async client => {
         const shipment = await lockShipment(client, shipmentId, body.version);
-        const previous = eventId ? await fetchEvent(client, shipmentId, eventId) : null;
+        if (action === 'created') {
+          const event = await insertTrackingEvent(client, shipment, eventDraft(body), { actorId: req.user.id, audit, onConfirmedEvent });
+          return { event, shipment: await getShipment(client, shipmentId) };
+        }
+        const previous = await fetchEvent(client, shipmentId, eventId);
         let changed;
         if (action === 'deleted') {
           await client.query(`UPDATE tracking_events SET deleted_at=clock_timestamp(), updated_at=clock_timestamp()
             WHERE shipment_id=$1 AND id=$2`, [shipmentId, eventId]);
         } else {
-          const merged = previous ? { ...previous, ...body } : body;
-          if (previous && !Object.hasOwn(body, 'offset') && ['eventDate', 'eventTime', 'timeZone'].some(field => Object.hasOwn(body, field))) {
+          const merged = { ...previous, ...body };
+          if (!Object.hasOwn(body, 'offset') && ['eventDate', 'eventTime', 'timeZone'].some(field => Object.hasOwn(body, field))) {
             delete merged.offset;
           }
           const draft = eventDraft(merged);
-          const values = eventValues(draft);
-          if (action === 'created') {
-            const { rows } = await client.query(`INSERT INTO tracking_events (status, kind, location, city, state,
-              country, occurred_at, event_date, event_time, time_zone, utc_offset, source, trailer, notes,
-              signed_by, delivery_notes, shipment_id, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-              $13,$14,$15,$16,$17,$18) RETURNING ${eventDateSelection}`, [...values, shipmentId, req.user.id]);
-            changed = mapEvent(rows[0]);
-          } else {
-            const { rows } = await client.query(`UPDATE tracking_events SET status=$1, kind=$2, location=$3, city=$4,
-              state=$5, country=$6, occurred_at=$7, event_date=$8, event_time=$9, time_zone=$10, utc_offset=$11,
-              source=$12, trailer=$13, notes=$14, signed_by=$15, delivery_notes=$16, updated_at=clock_timestamp()
-              WHERE shipment_id=$17 AND id=$18 RETURNING ${eventDateSelection}`, [...values, shipmentId, eventId]);
-            changed = mapEvent(rows[0]);
-          }
+          const { rows } = await client.query(`UPDATE tracking_events SET status=$1, kind=$2, location=$3, city=$4,
+            state=$5, country=$6, occurred_at=$7, event_date=$8, event_time=$9, time_zone=$10, utc_offset=$11,
+            source=$12, trailer=$13, notes=$14, signed_by=$15, delivery_notes=$16, updated_at=clock_timestamp()
+            WHERE shipment_id=$17 AND id=$18 RETURNING ${eventDateSelection}`, [...eventValues(draft), shipmentId, eventId]);
+          changed = mapEvent(rows[0]);
         }
         const latest = await currentEvent(client, shipmentId);
         const nextStatus = latest?.status ?? 'created';
@@ -704,9 +797,6 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
         await audit(client, { actorId: req.user.id, action: `event.${action}`, targetType: 'tracking_event', targetId: touched.id,
           metadata: { shipmentId, status: touched.status, kind: touched.kind, occurredAt: touched.occurredAt,
             previousStatus: previous?.status, previousKind: previous?.kind, previousOccurredAt: previous?.occurredAt } });
-        if (action === 'created' && latest?.id === changed.id && nextStatus !== shipment.status) {
-          await onConfirmedEvent?.(client, { shipmentId, eventId: changed.id, status: nextStatus });
-        }
         return { event: changed ?? null, shipment: await getShipment(client, shipmentId) };
       });
       res.status(action === 'created' ? 201 : 200).json(result);

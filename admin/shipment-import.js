@@ -1,51 +1,11 @@
 import { api, bindForm, feedback, formFeedback, heading, html, section, table } from './ui.js';
 import { exportShipmentCsv, maxShipmentCsvBytes, maxShipmentRows, parseShipmentCsv } from './shipment-csv.js';
+import { csvImportRetryId, decodeCsvFile } from './import-utils.js';
 
-const importKeys = new Map();
-const validUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const numberFormat = new Intl.NumberFormat('en-US');
 
 function nameFor(count) {
   return count === 1 ? 'shipment' : 'shipments';
-}
-
-async function retryKey(fileBytes, userId) {
-  const scope = new TextEncoder().encode(String(userId) + '\n');
-  const material = new Uint8Array(scope.length + fileBytes.byteLength);
-  material.set(scope);
-  material.set(fileBytes, scope.length);
-  const hash = await crypto.subtle.digest('SHA-256', material);
-  const fingerprint = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
-  const storageKey = 'shipment-csv-import-v1:' + fingerprint;
-
-  let previous = importKeys.get(storageKey);
-  try {
-    previous ||= sessionStorage.getItem(storageKey);
-  } catch {
-    // A browser may block session storage. The in-page key still supports retry.
-  }
-  if (previous && validUuid.test(previous)) return previous;
-
-  const id = crypto.randomUUID();
-  try {
-    sessionStorage.setItem(storageKey, id);
-  } catch {
-    importKeys.set(storageKey, id);
-  }
-  return id;
-}
-
-async function decodeFile(file) {
-  if (!(file instanceof File) || file.size === 0) throw new Error('Choose a CSV file with at least one shipment.');
-  if (!file.name.toLowerCase().endsWith('.csv')) throw new Error('Choose a file with a .csv extension.');
-  if (file.size > maxShipmentCsvBytes) throw new Error('Choose a CSV file no larger than 1 MB.');
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
-    return { bytes, text };
-  } catch {
-    throw new Error('The file could not be read as UTF-8. Save it as CSV UTF-8 and try again.');
-  }
 }
 
 function partyLabel(party) {
@@ -164,7 +124,10 @@ export function renderShipmentImport(container, context) {
     const file = values.get('csv');
     let source;
     try {
-      source = await decodeFile(file);
+      source = await decodeCsvFile(file, {
+        maxBytes: maxShipmentCsvBytes,
+        emptyMessage: 'Choose a CSV file with at least one shipment.',
+      });
     } catch (error) {
       if (context.active() && version === selectionVersion) throw error;
       return;
@@ -185,7 +148,7 @@ export function renderShipmentImport(container, context) {
       button.textContent = 'Creating shipments…';
       confirm.setAttribute('aria-busy', 'true');
       try {
-        const importId = await retryKey(source.bytes, context.user.id);
+        const importId = await csvImportRetryId('shipment-csv-import-v1', context.user.id, source.bytes);
         const result = await api('/api/admin/shipments/bulk', {
           method: 'POST',
           signal: AbortSignal.timeout(120_000),

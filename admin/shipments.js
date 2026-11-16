@@ -138,7 +138,7 @@ function statistics(stats) {
 const listPages = {
   overview: ['Dashboard Overview', 'Shipment counts, delivery status and recent activity.', 'summary'],
   shipments: ['Shipments', 'Search, create and update shipments.', 'summary'],
-  numbers: ['Tracking Numbers', 'Create a shipment or import a CSV to assign tracking numbers.', 'summary'],
+  numbers: ['Tracking Numbers', 'Create tracking numbers, import shipments, or update progress from a CSV.', 'summary'],
   events: ['Tracking Events', 'Choose a shipment to see its movement history.', 'events'],
   documents: ['Shipment Documents', 'Choose a shipment to manage its BOL or delivery documents.', 'documents'],
 };
@@ -150,8 +150,9 @@ export async function renderShipmentList(container, context, kind) {
   const isOverview = kind === 'overview';
   const isNumbers = kind === 'numbers';
   const importLink = isNumbers || kind === 'shipments' ? '<a class="button secondary" href="#bulk">Import Shipment CSV</a>' : '';
+  const updateLink = isNumbers || kind === 'events' ? '<a class="button secondary" href="#bulk-progress">Update Progress from CSV</a>' : '';
   const actions = canEditShipment(context.user)
-    ? `<a class="button" href="#new">${isNumbers ? 'Create Tracking Number' : 'Create Shipment'}</a>${importLink}` : '';
+    ? `<a class="button" href="#new">${isNumbers ? 'Create Tracking Number' : 'Create Shipment'}</a>${importLink}${updateLink}` : '';
   container.innerHTML = heading(title, description, actions) +
     (isNumbers ? section('Find a Tracking Number', trackingNumberSearch()) : section('Filter Shipments', filterFields())) +
     '<div data-results role="status">Loading shipments…</div>';

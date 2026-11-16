@@ -70,7 +70,10 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     VALUES ($1,'ship_from','Albany','NY','12207','US'), ($1,'ship_to','Boston','MA','02108','US')`, [legacy.id]);
   await pool.query(await readFile(new URL('../server/migrations/004-numeric-tracking-numbers.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../server/migrations/007-pro-aliases.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('../server/migrations/008-delivery-attempt-status.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../server/migrations/009-bulk-shipment-imports.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('../server/migrations/010-bulk-progress-imports.sql', import.meta.url), 'utf8'));
+  await pool.query('CREATE TABLE fixture_notices (event_id uuid PRIMARY KEY REFERENCES tracking_events(id))');
   function requireAuth(req, res, next) {
     const user = users.get(req.get('X-Fixture-Role'));
     if (!user) return res.status(401).json({ error: 'Authentication required.' });
@@ -84,7 +87,10 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
   const confirmed = [];
   const { admin, publicTracking } = createShipmentRouters({
     pool, requireAuth, requireRole, audit, signDocumentKey: randomBytes(32),
-    onConfirmedEvent: async (_client, event) => { confirmed.push(event); },
+    onConfirmedEvent: async (client, event) => {
+      await client.query('INSERT INTO fixture_notices (event_id) VALUES ($1)', [event.eventId]);
+      confirmed.push(event);
+    },
   });
   const app = express();
   app.use(express.json({ limit: '3mb' }));
@@ -447,5 +453,86 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     await pool.query('DROP TRIGGER reject_test_import_receipt ON shipment_imports');
     assert.equal((await change(shipments + '/bulk', payload)).status, 201);
     assert.equal(await count(), 2);
+  });
+
+  await t.test('bulk progress accepts retired PROs, records confirmed history, and replays original event receipts', async () => {
+    const endpoint = shipments + '/events/bulk';
+    const send = (body, role = 'operator') => change(endpoint, body, 'POST', role);
+    const importId = randomUUID();
+    const newer = automatic.body.shipment;
+    const eventFields = { eventDate: '2025-01-09', eventTime: '12:20', timeZone: 'America/New_York',
+      city: 'Albany', state: 'NY', country: 'US', source: 'QA bulk import scan', notes: 'Internal bulk note', trailer: 'TEST-22' };
+    const existing = await change(`${shipments}/${newer.id}/events`, {
+      ...eventFields, status: 'in_transit', kind: 'confirmed', version: newer.version,
+    });
+    assert.equal(existing.status, 201, existing.body.error);
+    const rows = [
+      { ...eventFields, pro: 'int-001234567', status: 'delivery_attempt_failed' },
+      { ...eventFields, pro: newer.pro, eventTime: '10:05', status: 'picked_up', kind: 'confirmed' },
+    ];
+    const draft = { importId, events: rows };
+    const recentNotices = confirmed.length;
+    assert.equal((await request(endpoint, { method: 'POST', data: draft })).status, 401);
+    assert.equal((await send(draft, 'viewer')).status, 403);
+    assert.equal((await send({ ...draft, importId: 'invalid' })).status, 400);
+    assert.equal((await send({ ...draft, events: Array(101).fill(rows[0]) })).status, 400);
+    const invalid = await send({ importId, events: [rows[0], { ...rows[1], city: '' }, { ...rows[0], kind: 'expected' },
+      { ...rows[0], status: 'created' }, { ...rows[0], status: 'delivered' }] });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(invalid.body.errors.map(error => error.row), [2, 3, 4, 5]);
+
+    const duplicate = await send({ importId, events: [...rows, { ...rows[0], pro: '001234567' }, { ...rows[0], pro: '000000000' }] });
+    assert.equal(duplicate.status, 400);
+    assert.deepEqual(duplicate.body.errors.map(error => error.row), [3, 4]);
+    assert.match(duplicate.body.errors[0].message, /row 1/);
+    assert.equal((await request(`${shipments}/${prefixed.id}/events`, { role: 'viewer' })).body.events.length, 0);
+    assert.equal((await request(`${shipments}/${newer.id}/events`, { role: 'viewer' })).body.events.length, 1);
+
+    const replies = await Promise.all([send(draft), send({ ...draft, importId: importId.toUpperCase() })]);
+    assert.deepEqual(replies.map(result => result.status).sort(), [200, 201], JSON.stringify(replies.map(result => result.body)));
+    const inserted = replies.find(result => result.status === 201).body;
+    const replay = replies.find(result => result.status === 200).body;
+    assert.equal(inserted.replayed, false);
+    assert.equal(replay.replayed, true);
+    assert.equal(inserted.total, 2);
+    assert.deepEqual(replay.events, inserted.events);
+    assert.deepEqual(inserted.events.map(row => [row.row, row.pro, row.shipmentId, row.status]), [
+      [1, 'INT-001234567', prefixed.id, 'delivery_attempt_failed'], [2, newer.pro, newer.id, 'picked_up'],
+    ]);
+    assert.equal((await send({ ...draft, events: [...rows].reverse() })).status, 409);
+    assert.deepEqual(confirmed.slice(recentNotices).map(entry => entry.eventId), [inserted.events[0].eventId]);
+
+    const recent = (await proSearch('001234567', newer.pro)).body.results.map(result => result.shipments[0]);
+    assert.equal(recent[0].status, 'delivery_attempt_failed');
+    assert.equal(recent[0].events[0].city, 'Albany');
+    assert.equal(recent[0].events[0].eventTime, '12:20');
+    assert.equal(recent[1].status, 'in_transit');
+    assert.deepEqual(recent[1].events.map(event => event.status), ['in_transit', 'picked_up']);
+    assert.doesNotMatch(JSON.stringify(recent), /Internal bulk note|QA bulk import scan/);
+    const log = await pool.query('SELECT actor_id,action,metadata FROM audit_logs WHERE target_id=$1', [importId]);
+    assert.deepEqual(log.rows, [{ actor_id: users.get('operator').id, action: 'events.imported', metadata: { total: 2 } }]);
+  });
+
+  await t.test('a late bulk progress failure rolls back event history and queued notices', async () => {
+    const importId = randomUUID();
+    const payload = { importId, events: [{ pro: '001234567', status: 'delivered', signedBy: 'QA Receiver',
+      eventDate: '2025-01-09', eventTime: '13:30', timeZone: 'America/New_York', city: 'Albany', state: 'NY', country: 'US', source: 'QA rollback scan' }] };
+    await pool.query(`CREATE FUNCTION reject_test_progress_receipt() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Isolated progress receipt failure fixture'; END;
+      $$;
+      CREATE TRIGGER reject_test_progress_receipt BEFORE INSERT ON shipment_event_imports
+      FOR EACH ROW EXECUTE FUNCTION reject_test_progress_receipt()`);
+    const counts = async () => (await pool.query(`SELECT
+      (SELECT count(*)::int FROM tracking_events) AS events,
+      (SELECT count(*)::int FROM fixture_notices) AS notices,
+      (SELECT count(*)::int FROM audit_logs) AS audits`)).rows[0];
+    const before = await counts();
+    assert.equal((await change(shipments + '/events/bulk', payload)).status, 500);
+    assert.deepEqual(await counts(), before);
+    assert.equal((await proSearch('001234567')).body.results[0].shipments[0].status, 'delivery_attempt_failed');
+    await pool.query('DROP TRIGGER reject_test_progress_receipt ON shipment_event_imports');
+    assert.equal((await change(shipments + '/events/bulk', payload)).status, 201);
+    assert.equal((await proSearch('001234567')).body.results[0].shipments[0].status, 'delivered');
+    assert.deepEqual(await counts(), { events: before.events + 1, notices: before.notices + 1, audits: before.audits + 2 });
   });
 });

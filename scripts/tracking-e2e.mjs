@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
 import { totpAtStep } from '../server/auth.mjs';
-import { readCsv } from '../admin/csv.js';
+import { readCsv, writeCsv } from '../admin/csv.js';
 
 const [baseUrl, destination, mode] = process.argv.slice(2);
 if (!baseUrl || !destination) throw new Error('Usage: node scripts/tracking-e2e.mjs BASE_URL DESTINATION [--verify-existing]');
@@ -264,6 +264,69 @@ async function verifyBulkImport(page, publicContext, fixture) {
   await tab.close();
   await snapshot(page,'admin-bulk-shipment-export');
   pass('Download bulk shipment CSV and open each public link', 'Original row order and fields retained with nine-digit PROs and direct tracking links');
+  return { csv, records, receipts:replay.shipments };
+}
+
+async function verifyBulkProgress(page, publicContext, { csv, records, receipts }) {
+  await page.goto(origin + '/admin/#numbers');
+  await page.getByRole('link', {name:'Update Progress from CSV'}).click();
+  const endpoint = '/api/admin/shipments/events/bulk';
+  const submit = page.getByRole('button', {name:'Record 2 Tracking Events',exact:true});
+  async function preview(contents, eventTime) {
+    await page.locator('#shipment-progress-file').setInputFiles({
+      name:'shipments-with-tracking.csv', mimeType:'text/csv', buffer:Buffer.from(contents),
+    });
+    await page.getByRole('button', {name:'Out for Delivery',exact:true}).click();
+    await fill(page, { eventDate:'2025-01-07', eventTime, timeZone:'America/New_York',
+      source:'QA dispatch', city:'Boston', state:'MA', country:'US' });
+    await page.getByRole('button', {name:'Preview Updates',exact:true}).click();
+    await submit.waitFor();
+  }
+  async function record(status) {
+    const request = page.waitForResponse(response => response.url().endsWith(endpoint) && response.request().method() === 'POST');
+    await submit.click();
+    const response = await request;
+    assert.equal(response.status(), status, await response.text());
+    await page.getByRole('heading', {name:'Progress Updated'}).waitFor();
+    return response.json();
+  }
+  await preview(csv, '09:00');
+  let saved;
+  await page.route('**' + endpoint, async route => {
+    const response = await route.fetch();
+    saved = { status:response.status(), result:await response.json() };
+    await route.abort('failed');
+  }, {times:1});
+  await submit.click();
+  await page.getByText('The server could not be reached. Try again.', {exact:true}).waitFor();
+  assert.equal(saved.status,201);
+  await page.reload();
+  await preview(csv, '09:00');
+  const replay = await record(200);
+  assert.equal(replay.replayed,true);
+  assert.deepEqual(replay.events, saved.result.events);
+  assert.deepEqual(replay.events.map(event => event.pro), receipts.map(row => row.pro));
+
+  const mixed = writeCsv(records.map(({ cells }, index) => [...cells,
+    ['event_status', 'Delivery Attempt Failed', 'Out for Delivery'][index]]));
+  await preview(mixed, '10:00');
+  const updated = await record(201);
+  assert.deepEqual(updated.events.map(event => event.status), ['delivery_attempt_failed','out_for_delivery']);
+  const tab = watch(await publicContext.newPage());
+  for (const [index, event] of updated.events.entries()) {
+    const url = records[index + 1].cells.at(-1);
+    const lookup = tab.waitForResponse(result => result.url().endsWith('/api/tracking/search'));
+    await tab.goto(url);
+    const shipment = (await (await lookup).json()).results[0].shipments[0];
+    assert.equal(shipment.pro, event.pro);
+    assert.equal(shipment.status, event.status);
+    assert.equal(shipment.events.length,2,'An interrupted import must not repeat the original scan');
+    await tab.getByRole('button', {name:'Show Details +'}).click();
+    assert.equal(await tab.locator('.delivery-alert-row').count(),2);
+  }
+  await tab.close();
+  await snapshot(page,'admin-bulk-progress-result');
+  pass('Re-upload exported CSV and record progress by PRO', 'Batch defaults and per-row statuses work, a lost response replays safely, and both statuses appear in public tracking');
 }
 
 try {
@@ -444,7 +507,7 @@ try {
     }
     pass('Six responsive viewports', viewportSizes.map(([w,h])=>`${w}×${h}`).join(', ') + '; no document overflow');
     await verifyAdminWorkflows(page, publicPage, fixture);
-    await verifyBulkImport(page, publicContext, fixture);
+    await verifyBulkProgress(page, publicContext, await verifyBulkImport(page, publicContext, fixture));
     assert.deepEqual(consoleErrors, [], 'No uncaught page errors');
     pass('No uncaught browser errors', 'Public tracking and admin');
     report.finished = new Date().toISOString();
