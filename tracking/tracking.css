@@ -111,6 +111,7 @@ summary::-webkit-details-marker{display:none}
 .shipment{background:var(--canvas);padding:0 13px 10px;margin:0 0 10px}.shipment:last-child{margin:0}
 .shipment>summary{background:var(--gray);color:#303030;grid-template-columns:minmax(0,1fr) minmax(0,.54fr) auto;margin:0 -13px;min-height:51px;overflow-wrap:anywhere}
 .headline-status{color:#175083}.headline-status.delivered{color:#008000}.headline-status.exception,.headline-status.cancelled{color:#a12524}.headline-status.pending{color:#6f4b0e}
+.headline-status.delivery-alert,.summary-panel.delivery-alert .status-line h3{color:#a12524}
 .shipment-body{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr);gap:10px}
 .summary-panel,.parties,.progress-panel,.details-panel{background:var(--white);overflow-wrap:anywhere}
 .summary-panel{padding:10px 18px 15px;min-height:213px}
@@ -159,6 +160,8 @@ dl{margin:0}dt{font-weight:700;margin:0 0 3px}dd{margin:0 0 6px;min-width:0}.sum
 .progress-table table{width:100%;min-width:368px;border-collapse:collapse;text-align:left;table-layout:auto}
 .progress-table th,.progress-table td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;line-height:16px;overflow-wrap:normal}
 .progress-table th{text-align:center}.progress-table tbody tr:last-child td{border:0}
+.progress-table .delivery-alert-row td{background:#fff3f2}
+.progress-table .delivery-alert-row td:nth-child(4){color:#a12524;font-weight:700}
 .progress-table col:nth-child(1){width:17%}.progress-table col:nth-child(2){width:12%}.progress-table col:nth-child(3){width:10%}.progress-table col:nth-child(4){width:47%}.progress-table col:nth-child(5){width:14%}
 .progress-table td:nth-child(2),.event-clock{white-space:nowrap}
 .details-panel dl{padding:0 17px 10px;line-height:16px}.details-panel dd{margin-bottom:5px}.details-panel dt{margin-bottom:1px}
@@ -300,6 +303,17 @@ dl{margin:0}dt{font-weight:700;margin:0 0 3px}dd{margin:0 0 6px;min-width:0}.sum
   .intro { font-size: 18px; }
   .shipment-details { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .progress-panel { margin-inline-end: 10px; }
+  .summary-panel.delivery-alert .status-line { grid-template-columns: 1fr; gap: 5px; }
+  .progress-table:has(.delivery-alert-row) { padding-inline: 5px; }
+  .progress-table:has(.delivery-alert-row) table { min-width: 0; table-layout: fixed; font-size: 12px; }
+  .progress-table:has(.delivery-alert-row) :is(td,th) { padding: 6px 3px; white-space: normal; overflow-wrap: anywhere; }
+  .progress-table:has(.delivery-alert-row) th { padding-inline: 1px; font-size: 10px; }
+  .progress-table:has(.delivery-alert-row) td:nth-child(2) { padding-inline: 1px; font-size: 11px; }
+  .progress-table:has(.delivery-alert-row) col:nth-child(1) { width: 19%; }
+  .progress-table:has(.delivery-alert-row) col:nth-child(2) { width: 19%; }
+  .progress-table:has(.delivery-alert-row) col:nth-child(3) { width: 14%; }
+  .progress-table:has(.delivery-alert-row) col:nth-child(4) { width: 33%; }
+  .progress-table:has(.delivery-alert-row) col:nth-child(5) { width: 15%; }
 }
 @media (max-width: 359px) {
   .status-line { gap: 12px; }

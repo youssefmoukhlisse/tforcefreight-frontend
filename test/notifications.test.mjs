@@ -34,7 +34,7 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   await database.query('CREATE SCHEMA ' + schema);
   pool = new pg.Pool({ connectionString: dbUrl, options: '-c search_path=' + schema });
   for (const file of ['001-auth.sql', '002-shipments.sql', '003-notifications.sql', '004-numeric-tracking-numbers.sql',
-    '005-notification-preferences.sql']) {
+    '005-notification-preferences.sql', '007-pro-aliases.sql', '008-delivery-attempt-status.sql']) {
     await pool.query(await readFile(new URL('../server/migrations/' + file, import.meta.url), 'utf8'));
   }
 
@@ -147,6 +147,10 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   assert.equal(confirmMessage.subject, 'Confirm shipment updates');
   const confirmToken = token(confirmMessage, 'confirm');
   assert.ok(confirmToken);
+  const reissued = await request('/api/admin/shipments/' + shipmentId, { version, pro: '000000125' },
+    { role: 'admin', method: 'PATCH' });
+  assert.equal(reissued.status, 200, reissued.body.error);
+  version = reissued.body.shipment.version;
   const tampered = confirmToken.slice(0, -1) + (confirmToken.endsWith('A') ? 'B' : 'A');
   assert.equal((await confirmation(tampered)).status, 404);
   assert.equal((await unsubscribe(confirmToken)).status, 404);
@@ -155,13 +159,13 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   assert.equal((await subscribe(recipient)).status, 202);
 
   await event('delivery_exception', '10:00', { kind: 'expected' });
-  const exception = await event('delivery_exception', '10:30');
-  await notifications.onConfirmedEvent(pool, { shipmentId, eventId: exception.id, status: exception.status });
+  const attempt = await event('delivery_attempt_failed', '10:30');
+  await notifications.onConfirmedEvent(pool, { shipmentId, eventId: attempt.id, status: attempt.status });
   await event('out_for_delivery', '09:10');
   const statusMessage = await waitFor(() => sent[1]);
   assert.equal(statusMessage.to, recipient);
-  assert.equal(statusMessage.subject, 'Shipment update: Delivery exception');
-  assert.match(statusMessage.text, /000000123/);
+  assert.equal(statusMessage.subject, 'Shipment update: Delivery attempt failed');
+  assert.match(statusMessage.text, /000000125/);
   assert.doesNotMatch(statusMessage.text, /private|example\.invalid@|555-0100|02108|12207|recipient@|sender@/i);
   assert.equal((await pool.query('SELECT count(*)::int AS total FROM notification_logs')).rows[0].total, 2);
   const unsubscribeToken = token(statusMessage, 'unsubscribe');
@@ -191,7 +195,9 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   assert.equal((await request('/api/admin/notifications', undefined, { role: 'viewer' })).status, 403);
   const history = await request('/api/admin/notifications', undefined, { role: 'admin' });
   assert.equal(history.status, 200, history.body.error);
+  assert.equal(history.body.subscriptions.length, 1);
   assert.equal(history.body.subscriptions[0].state, 'revoked');
+  assert.equal(history.body.subscriptions[0].trackingNumber, '000000125');
   assert.deepEqual(history.body.logs.map(log => log.status).sort(), ['canceled', 'sent', 'sent']);
 
   await t.test('multiple recipients confirm selected options independently before receiving personalized updates', async () => {
@@ -206,6 +212,10 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
     }, { role: 'admin' });
     assert.equal(reply.status, 201, reply.body.error);
     const shipment = reply.body.shipment;
+    const replaced = await request('/api/admin/shipments/' + shipment.id, { version: shipment.version, pro: '000000445' },
+      { role: 'admin', method: 'PATCH' });
+    assert.equal(replaced.status, 200, replaced.body.error);
+    shipment.version = replaced.body.shipment.version;
     const input = {
       pro: shipment.pro,
       emails: [destinationAddress, ` ${destinationAddress.toUpperCase()} `, originAddress, outsider],

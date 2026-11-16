@@ -8,6 +8,7 @@ export const statuses = {
   delivery_appointment_scheduled: 'Delivery Appointment Scheduled',
   out_for_delivery: 'Out for Delivery',
   delivered: 'Delivered',
+  delivery_attempt_failed: 'Delivery Attempt Failed',
   delivery_exception: 'Delivery Exception',
   delayed: 'Delayed',
   cancelled: 'Cancelled',
@@ -41,8 +42,9 @@ export function badge(status) {
     delivered: 'success',
     cancelled: 'muted',
     delivery_exception: 'danger',
+    delivery_attempt_failed: 'danger',
     delayed: 'warning',
-    out_for_delivery: 'info',
+    out_for_delivery: 'danger',
     arrived_at_service_center: 'info',
     in_transit: 'info',
     picked_up: 'info',
@@ -159,6 +161,7 @@ export async function api(path, options = {}) {
     const error = new Error(typeof payload.error === 'string' ? payload.error : payload.message || 'The server could not complete this request.');
     error.status = response.status;
     error.code = payload.code;
+    if (Array.isArray(payload.errors)) error.errors = payload.errors;
     if (response.status === 401 && (path.startsWith('/api/admin/') || path.startsWith('/api/auth/users'))) {
       document.dispatchEvent(new Event('admin-session-expired'));
     }

@@ -27,8 +27,9 @@ const steps = {
   departed_service_center: ['Departed Service Center', 'The shipment has left a service center.', 55],
   in_transit: ['In Transit', 'The shipment is in transit.', 60],
   delivery_appointment_scheduled: ['Delivery Appointment Scheduled', 'A delivery appointment has been scheduled.', 70],
-  out_for_delivery: ['Out for Delivery', 'The shipment is out for delivery.', 87],
+  out_for_delivery: ['Out for Delivery', 'The shipment is out for delivery.', 87, 'delivery-alert'],
   delivered: ['Delivered', 'Shipment has been delivered to the consignee.', 100, 'delivered'],
+  delivery_attempt_failed: ['Delivery Attempt Failed', 'Delivery was attempted and could not be completed.', 87, 'delivery-alert'],
   delivery_exception: ['Delivery Exception', 'An issue is affecting delivery.', 55, 'exception'],
   delayed: ['Delayed', 'The shipment has been delayed.', 55, 'exception'],
   cancelled: ['Cancelled', 'The shipment has been cancelled.', 0, 'cancelled'],
@@ -86,8 +87,9 @@ function historyTable(events = []) {
     <table><caption class="sr-only">Shipment progress</caption><colgroup><col><col><col><col><col></colgroup>
       <thead><tr><th scope="col">Location</th><th scope="col">Date</th><th scope="col">Time</th><th scope="col">Activity</th><th scope="col">Trailer</th></tr></thead>
       <tbody>${events.map(event => {
-        const [label] = statusInfo(event.status);
-        return `<tr><td>${visible(event.location || locationText(event))}</td><td>${date(event.eventDate)}</td><td>${eventLocalTime(event)}</td>
+        const [label, , , statusClass] = statusInfo(event.status);
+        const highlight = statusClass === 'delivery-alert' && event.kind === 'confirmed' ? ' class="delivery-alert-row"' : '';
+        return `<tr${highlight}><td>${visible(event.location || locationText(event))}</td><td>${date(event.eventDate)}</td><td>${eventLocalTime(event)}</td>
           <td>${event.kind === 'expected' ? '<strong>Expected: </strong>' : ''}${escapeHtml((eventActivities[event.status] || label).toUpperCase())}</td><td>${visible(event.trailer)}</td></tr>`;
       }).join('')}</tbody>
     </table></div>`;
@@ -106,7 +108,7 @@ function renderShipment(shipment, id) {
   return `<details class="shipment" open>
     <summary><span>${visible(shipment.pro)}</span><span class="headline-status ${statusClass}">${label}</span></summary>
     <div class="shipment-body">
-      <section class="summary-panel" aria-labelledby="status-${id}">
+      <section class="summary-panel ${statusClass}" aria-labelledby="status-${id}">
         <div class="status-line">
           <div class="status-title"><h3 id="status-${id}">${label}</h3><details class="status-help">
             <summary aria-label="About ${label}">?</summary>

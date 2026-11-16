@@ -58,6 +58,10 @@ function statusLabel(status) {
   return eventLabels.get(status) ?? status.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
 }
 
+function preferenceForStatus(status) {
+  return status === 'delivery_attempt_failed' ? 'delivery_exception' : status;
+}
+
 function makeTransport(environment, appOrigin) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, RECORDS_EMAIL_ENABLED } = process.env;
   if (environment !== 'production' || RECORDS_EMAIL_ENABLED !== 'true' || !appOrigin || !SMTP_HOST || !SMTP_USER ||
@@ -160,10 +164,10 @@ export function createNotifications({ pool, requireRole, audit, appOrigin, envir
     const [subs, logs] = await Promise.all([
       pool.query(`SELECT s.id,s.shipment_id AS "shipmentId",t.pro_number AS "trackingNumber",
         s.email,s.state,s.created_at AS "createdAt" FROM notification_subscriptions s
-        JOIN tracking_numbers t ON t.shipment_id=s.shipment_id ORDER BY s.requested_at DESC LIMIT $1`, [limit]),
+        JOIN tracking_numbers t ON t.shipment_id=s.shipment_id AND t.is_current ORDER BY s.requested_at DESC LIMIT $1`, [limit]),
       pool.query(`SELECT n.id,n.type,n.status,n.created_at AS "createdAt",t.pro_number AS "trackingNumber"
         FROM notification_logs n JOIN notification_subscriptions s ON s.id=n.subscription_id
-        JOIN tracking_numbers t ON t.shipment_id=s.shipment_id ORDER BY n.created_at DESC LIMIT $1`, [limit]),
+        JOIN tracking_numbers t ON t.shipment_id=s.shipment_id AND t.is_current ORDER BY n.created_at DESC LIMIT $1`, [limit]),
     ]);
     res.json({ subscriptions: subs.rows, logs: logs.rows });
   });
@@ -185,12 +189,13 @@ export function createNotifications({ pool, requireRole, audit, appOrigin, envir
   });
 
   async function onConfirmedEvent(client, {shipmentId, eventId, status}) {
-    if (!transport || !eventLabels.has(status)) return;
+    const preference = preferenceForStatus(status);
+    if (!transport || !eventLabels.has(preference)) return;
     await client.query(`
       INSERT INTO notification_logs (subscription_id,event_id,generation,type,event_status)
       SELECT s.id,$2,s.generation,'status',$3 FROM notification_subscriptions s
-      WHERE s.shipment_id=$1 AND s.state='active' AND $3=ANY(s.event_options) AND ${currentParty} ON CONFLICT DO NOTHING
-    `, [shipmentId, eventId, status]);
+      WHERE s.shipment_id=$1 AND s.state='active' AND $4=ANY(s.event_options) AND ${currentParty} ON CONFLICT DO NOTHING
+    `, [shipmentId, eventId, status, preference]);
   }
 
   let inFlight = Promise.resolve();
@@ -215,15 +220,15 @@ export function createNotifications({ pool, requireRole, audit, appOrigin, envir
     }
     const {rows:[recipient]} = await pool.query(`
       SELECT s.email,s.personal_message,t.pro_number,h.status AS current_status FROM notification_subscriptions s
-      JOIN tracking_numbers t ON t.shipment_id=s.shipment_id JOIN shipments h ON h.id=s.shipment_id
+      JOIN tracking_numbers t ON t.shipment_id=s.shipment_id AND t.is_current JOIN shipments h ON h.id=s.shipment_id
       WHERE s.id=$1 AND s.generation=$2 AND ${currentParty}
         AND (($3='confirmation' AND s.state='pending' AND s.requested_at > now() - interval '24 hours')
           OR ($3='current_status' AND s.state='active' AND 'current_status'=ANY(s.event_options))
-          OR ($3='status' AND s.state='active' AND h.status=$5 AND $5=ANY(s.event_options) AND $4=(
+          OR ($3='status' AND s.state='active' AND h.status=$5 AND $6=ANY(s.event_options) AND $4=(
             SELECT e.id FROM tracking_events e WHERE e.shipment_id=s.shipment_id
               AND e.deleted_at IS NULL AND e.kind='confirmed' ORDER BY e.occurred_at DESC,e.created_at DESC,e.id DESC LIMIT 1
           )))
-    `, [job.subscription_id,job.generation,job.type,job.event_id,job.event_status]);
+    `, [job.subscription_id,job.generation,job.type,job.event_id,job.event_status,preferenceForStatus(job.event_status)]);
     if (!recipient) {
       await pool.query("UPDATE notification_logs SET status='canceled',lease_id=NULL WHERE id=$1 AND lease_id=$2", [job.id,lease]);
       return;

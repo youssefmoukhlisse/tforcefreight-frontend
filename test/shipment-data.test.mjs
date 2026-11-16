@@ -33,7 +33,7 @@ test('lookup recognizes nine-digit and legacy tracking strings', () => {
 
 const dbUrl = process.env.TEST_SHIPMENT_DATABASE_URL;
 
-test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirmed events, and public privacy', {
+test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed events, and public privacy', {
   skip: !dbUrl && 'Set TEST_SHIPMENT_DATABASE_URL to an isolated loopback PostgreSQL database.',
   timeout: 30_000,
 }, async t => {
@@ -69,6 +69,7 @@ test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirm
   await pool.query(`INSERT INTO shipment_parties (shipment_id,kind,city,state,postal_code,country)
     VALUES ($1,'ship_from','Albany','NY','12207','US'), ($1,'ship_to','Boston','MA','02108','US')`, [legacy.id]);
   await pool.query(await readFile(new URL('../server/migrations/004-numeric-tracking-numbers.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('../server/migrations/007-pro-aliases.sql', import.meta.url), 'utf8'));
   function requireAuth(req, res, next) {
     const user = users.get(req.get('X-Fixture-Role'));
     if (!user) return res.status(401).json({ error: 'Authentication required.' });
@@ -172,8 +173,29 @@ test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirm
   ]);
   assert.deepEqual(races.map(result => result.status).sort(), [200, 409]);
   let version = races.find(result => result.status === 200).body.shipment.version;
-  assert.equal((await change(detail, { version, pro: '000012346' }, 'PATCH')).status, 400);
+  assert.equal((await change(detail, { version, pro: '00001234' }, 'PATCH')).status, 400);
+  assert.equal((await change(detail, { version, pro: '000012346' }, 'PATCH', 'viewer')).status, 403);
+  assert.equal((await change(detail, { version, pro: automatic.body.shipment.pro }, 'PATCH')).status, 409);
+  const proRaces = await Promise.all([
+    change(detail, { version, pro: '000012346' }, 'PATCH'),
+    change(detail, { version, pro: '000012347' }, 'PATCH'),
+  ]);
+  assert.deepEqual(proRaces.map(result => result.status).sort(), [200, 409]);
+  const replaced = proRaces.find(result => result.status === 200).body.shipment;
+  version = replaced.version;
+  assert.equal(replaced.id, created.id);
+  assert.match(replaced.pro, /^00001234[67]$/);
+  assert.equal(replaced.issuance, 'manual');
+  assert.equal((await change(detail, { version, pro: created.pro }, 'PATCH')).status, 409);
+  assert.equal((await change(shipments, { ...draft, pro: created.pro })).status, 409);
+  for (const filter of ['?q=' + created.pro, '?pro=' + created.pro, '?pro=' + replaced.pro]) {
+    const result = await request(shipments + filter, { role: 'viewer' });
+    assert.equal(result.body.total, 1);
+    assert.equal(result.body.shipments[0].pro, replaced.pro);
+  }
+  assert.equal((await request(shipments + '?pro=01234567', { role: 'viewer' })).status, 400);
   await assert.rejects(pool.query('DELETE FROM tracking_numbers WHERE pro_number=$1', [created.pro]), /permanent/);
+  await assert.rejects(pool.query('UPDATE tracking_numbers SET is_current=false WHERE pro_number=$1', [replaced.pro]), /requires a current replacement/);
 
   const event = { city: 'Buffalo', state: 'NY', country: 'US', eventDate: '2024-11-03', eventTime: '01:30',
     timeZone: 'America/New_York', kind: 'confirmed', source: 'Synthetic fixture scan', location: 'Private site name',
@@ -204,12 +226,14 @@ test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirm
   assert.deepEqual(confirmed.map(item => item.status), ['picked_up', 'in_transit', 'delivered']);
   assert.equal((await change(`${eventsPath}/${delivered.body.event.id}`, { version, trailer: 'CHANGED' }, 'PATCH', 'operator')).status, 403);
 
-  const searched = await proSearch(created.pro, automatic.body.shipment.pro, legacyPro.toLowerCase(), '000000000');
+  const searched = await proSearch(created.pro, automatic.body.shipment.pro, legacyPro.toLowerCase(), '000000000', replaced.pro);
   assert.equal(searched.status, 200, searched.body.error);
   assert.equal(searched.headers.get('cache-control'), 'no-store');
-  assert.deepEqual(searched.body.results.map(result => result.shipments.length), [1, 1, 1, 0]);
+  assert.deepEqual(searched.body.results.map(result => result.shipments.length), [1, 1, 1, 0, 1]);
   assert.equal(searched.body.results[2].shipments[0].pro, legacyPro);
   const first = searched.body.results[0].shipments[0];
+  assert.equal(first.pro, replaced.pro);
+  assert.deepEqual(first, searched.body.results[4].shipments[0]);
   assert.equal(first.status, 'delivered');
   assert.equal(first.delivery.eventTime, '13:15');
   assert.equal(first.delivery.signedBy, null);
@@ -261,7 +285,26 @@ test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirm
   const auditTrail = (await request(`${dashboard}/audit`, { role: 'admin' })).body.entries;
   assert.ok(auditTrail.some(entry => entry.action === 'event.deleted' && entry.targetId === delivered.body.event.id));
   assert.ok(auditTrail.some(entry => entry.action === 'document.created' && entry.targetId === upload.body.document.id));
+  assert.ok(auditTrail.some(entry => entry.action === 'shipment.pro_changed' && entry.targetId === created.id &&
+    entry.metadata.previousPro === created.pro && entry.metadata.pro === replaced.pro));
   assert.equal(auditTrail.filter(entry => entry.action === 'shipment.created').length, 2);
+  const migratedLegacy = await change(shipments + '/' + legacy.id, {
+    version: legacyRepeat.body.shipment.version, pro: '000012348',
+  }, 'PATCH');
+  assert.equal(migratedLegacy.status, 200, migratedLegacy.body.error);
+  assert.equal((await proSearch(legacyPro.toLowerCase())).body.results[0].shipments[0].pro, '000012348');
+
+  const { rows: [prefixed] } = await pool.query(
+    "INSERT INTO shipments (service,pieces,weight,weight_unit,created_by) VALUES ('Legacy numeric fixture',1,1,'lb',$1) RETURNING id",
+    [users.get('admin').id],
+  );
+  await pool.query("INSERT INTO tracking_numbers (pro_number,shipment_id,issuance) VALUES ('INT-001234567',$1,'manual')", [prefixed.id]);
+  await pool.query(`INSERT INTO shipment_parties (shipment_id,kind,city,state,postal_code,country)
+    SELECT $1,kind,city,state,postal_code,country FROM shipment_parties WHERE shipment_id=$2`, [prefixed.id, legacy.id]);
+  const normalized = await change(shipments + '/' + prefixed.id, { version: 1, pro: '001234567' }, 'PATCH');
+  assert.equal(normalized.status, 200, normalized.body.error);
+  assert.equal(normalized.body.shipment.pro, '001234567');
+  assert.equal((await proSearch('INT-001234567')).body.results[0].shipments[0].pro, '001234567');
 
   await t.test('create fills missing references without colliding or changing manual reuse', async subtest => {
     const legacyShipment = await request(`${shipments}/${legacy.id}`, { role: 'viewer' });

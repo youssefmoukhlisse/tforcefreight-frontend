@@ -13,10 +13,13 @@ The `admin` role manages users, sensitive event corrections/removals, shipment d
 
 Leave the bill of lading or PO number blank when creating a shipment to issue that number automatically. Bills of lading use 11 digits and PO numbers use `CA01226` followed by five digits and `A`. Existing shipment references can still be entered manually.
 
+Use **Customers → Import Customers** to download a CSV template, preview up to 500 records, and import them into the private directory. Duplicate customer records are skipped. In **Tracking Numbers → Create Tracking Number**, select saved customers to fill the sender and recipient fields. Use **Edit PRO** to choose a replacement or **Update Progress** to record an event. Confirmed **Out for Delivery** and **Delivery Attempt Failed** events are highlighted in public tracking.
+
 ## Database and privacy
 
 - `users`, `auth_sessions`, `auth_challenges`, `auth_password_resets`, `auth_recovery_codes`, `auth_rate_limits`, and `audit_logs` hold auth state and administrative history. Passwords are salted scrypt hashes; TOTP secrets are encrypted. Login and public lookup carry database-backed limits.
-- `shipments`, `tracking_numbers`, `shipment_parties`, `tracking_events`, and `shipment_documents` hold the shipment lifecycle, party information and PDF documents. SQL constraints and a trigger protect permanent numbers. The transaction locks the shipment and checks a version on changes. The current status is determined by the latest confirmed event. An expected event does not establish that a delivery or a pickup occurred.
+- `shipments`, `tracking_numbers`, `shipment_parties`, `tracking_events`, and `shipment_documents` hold the shipment lifecycle, party information and PDF documents. Changing a PRO adds a new primary number and keeps the previous one as an alias for the same shipment. SQL constraints prevent numbers from being reused. The transaction locks the shipment and checks a version on changes. The current status is determined by the latest confirmed event. An expected event does not establish that a delivery or a pickup occurred.
+- `imported_customers` stores contact information from CSV uploads for signed-in administrative users. Choosing a saved customer copies its details into the shipment form.
 - `notification_subscriptions` and `notification_logs` persist confirmed subscriptions and their outbox/history. Schema migrations use a database lock and record the checksum of each applied file. Add new migrations for future changes rather than editing applied files.
 - Public PRO lookup returns a limited result without addresses, names of individual contacts, phones, emails, internal notes, or documents. Shipment company names and selected identifiers require the operator to enable sharing. Viewing a signature requires approved sharing and the matching shipment date range and both postal codes. A public BOL link requires a separately approved redacted copy and expires after five minutes; proof of delivery remains private. Review any PDF before marking a redacted BOL for sharing.
 
@@ -31,9 +34,10 @@ Leave the bill of lading or PO number blank when creating a shipment to issue th
 | Accounts | `GET, POST /api/auth/users`; `PATCH /api/auth/users/:id`; `POST /api/auth/users/:id/reset` |
 | Shipment admin | `GET /api/admin/stats`; `GET, POST /api/admin/shipments`; `GET, PATCH /api/admin/shipments/:id` |
 | Shipment events and PDFs | `GET, POST /api/admin/shipments/:id/events` and `/documents`; `PATCH, DELETE /api/admin/shipments/:id/events/:eventId`; `GET, DELETE /api/admin/shipments/:id/documents/:documentId` |
-| Admin records | `GET /api/admin/customers`, `/audit`, `/notifications`; `PATCH /api/admin/notifications/:id` |
+| Customers | `GET /api/admin/customers` (shipment contacts), `GET /api/admin/customers/imported`, `POST /api/admin/customers/import` |
+| Admin records | `GET /api/admin/audit`, `/notifications`; `PATCH /api/admin/notifications/:id` |
 
-Authenticated writes require same-origin JSON and a valid session. Search uses JSON request bodies instead of placing shipment numbers in URLs. Auth and shipment API responses are not cached.
+Authenticated writes require same-origin JSON and a valid session. Public search uses JSON request bodies. Auth and shipment API responses are not cached.
 
 ## Email
 
@@ -43,6 +47,6 @@ Send Updates accepts up to six recipient entries and returns a generic result. T
 
 ## Verification
 
-Unit and integration tests: run `pnpm test`. For PostgreSQL integration tests, provide **disposable**, locally isolated test databases in `TEST_AUTH_DATABASE_URL`, `TEST_SHIPMENT_DATABASE_URL` and `TEST_NOTIFICATION_DATABASE_URL`. The tests create isolated schemas. Notification tests use an in-process transport and cannot send external mail.
+Unit and integration tests: run `pnpm test`. For PostgreSQL integration tests, provide **disposable**, locally isolated test databases in `TEST_AUTH_DATABASE_URL`, `TEST_SHIPMENT_DATABASE_URL`, `TEST_CUSTOMER_DATABASE_URL`, and `TEST_NOTIFICATION_DATABASE_URL`. The tests create isolated schemas. Notification tests use an in-process transport and cannot send external mail.
 
 Browser E2E: run `node scripts/tracking-e2e.mjs BASE_URL OUTPUT_DIR` in a terminal with Chrome and Playwright installed. If Playwright is bundled separately, set `TFORCE_AUDIT_MODULES` to the directory containing it. At the hidden prompt enter JSON with `bootstrap: true` and the fields `email`, `password` and `setupToken` for a fresh **test** deployment. For an already enrolled test user use `bootstrap: false` and `authenticatorSecret` in place of the setup token. Do not use first-setup tests against a database with real records. The test creates a clearly marked synthetic shipment, exercises the complete public lookup, and saves screenshots at six viewports. Restart the **application**, then rerun with `--verify-existing` and the same output directory to verify that the shipment and timeline persisted.

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomInt } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
@@ -122,6 +123,82 @@ async function enterEvent(page, fields) {
   await page.waitForFunction(() => document.querySelector('#source')?.value === '');
 }
 
+async function verifyAdminWorkflows(page, publicPage, fixture) {
+  await page.goto(origin + '/admin/#customers');
+  const rows = [
+    ['company', 'contact', 'address', 'city', 'state', 'postalCode', 'country', 'email'],
+    [fixture + ' Sender', 'QA Contact', '1 Test Street', 'Hartford', 'CT', '06103', 'US', fixture + '-from@example.test'],
+    [fixture + ' Recipient', 'QA Contact', '2 Test Street', 'Boston', 'MA', '02108', 'US', fixture + '-to@example.test'],
+  ];
+  await page.locator('#customer-import-file').setInputFiles({ name: 'customers.csv', mimeType: 'text/csv',
+    buffer: Buffer.from(rows.map(row => row.join(',')).join('\r\n')) });
+  await page.getByRole('button', {name:'Preview CSV'}).click();
+  await page.getByRole('heading', {name:'Import Preview'}).waitFor();
+  const importResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/customers/import'));
+  await page.getByRole('button', {name:'Import 2 Customers'}).click();
+  assert.equal((await (await importResponse).json()).imported, 2);
+  pass('CSV import and preview', 'Two synthetic contacts saved to the customer directory');
+
+  await page.goto(origin + '/admin/#numbers');
+  await page.getByRole('link', {name:'Create Tracking Number'}).click();
+  for (const [party, row] of [['shipFrom', rows[1]], ['shipTo', rows[2]]]) {
+    const picker = page.locator(`[data-customer-picker="${party}"]`);
+    await picker.locator('summary').click();
+    await picker.locator('input').fill(row[0]);
+    await picker.locator('option').filter({ hasText: row[0] }).waitFor({state:'attached'});
+    await picker.locator('select').selectOption({ label: row[0] + ' / ' + row[1] + ' — ' + row[3] + ', ' + row[4] });
+    await picker.getByRole('button', {name:'Use customer'}).click();
+    assert.equal(await page.locator('#' + party + '-postalCode').inputValue(), row[5]);
+  }
+  await fill(page, { pieces:1, weight:100 });
+  const create = page.waitForResponse(response => response.url().endsWith('/api/admin/shipments') && response.request().method() === 'POST');
+  await page.locator('#shipment-form').getByRole('button', {name:'Create Shipment'}).click();
+  const created = await create;
+  assert.equal(created.status(), 201);
+  const { shipment } = await created.json();
+  assert.match(shipment.pro, /^[0-9]{9}$/);
+  await page.getByRole('heading', {name:shipment.pro,exact:true}).waitFor();
+  pass('Fast PRO creation from saved customers', 'Sender and recipient populated from CSV, with leading-zero postal codes preserved');
+
+  await page.goto(origin + '/admin/#numbers');
+  const find = async number => {
+    await page.getByLabel('Tracking number (PRO)').fill(number);
+    await page.getByRole('button', {name:'Find Tracking Number'}).click();
+  };
+  await find(shipment.pro);
+  await page.getByRole('link', {name:'Edit PRO ' + shipment.pro,exact:true}).click();
+  const replacement = '0' + String(randomInt(100_000_000)).padStart(8, '0');
+  await page.getByLabel('New PRO number').fill(replacement);
+  await page.getByRole('button', {name:'Save PRO'}).click();
+  await page.getByRole('heading', {name:replacement,exact:true}).waitFor();
+  await page.goto(origin + '/admin/#numbers');
+  await find(shipment.pro);
+  await page.getByRole('link', {name:'Update progress for ' + replacement}).click();
+  pass('Edit the tracking number and find it by the previous PRO', 'An exact lookup for the old number opens the same shipment with the updated primary PRO');
+
+  for (const [label, status, minute] of [
+    ['Out for Delivery', 'out_for_delivery', '14:00'],
+    ['Delivery Attempt Failed', 'delivery_attempt_failed', '14:05'],
+  ]) {
+    await page.getByRole('button', {name:label,exact:true}).click();
+    assert.equal(await page.locator('#event-status').inputValue(), status);
+    await enterEvent(page, { status, city:'Boston', state:'MA', day:'2025-01-01', time:minute, trailer:'QA200' });
+    await publicPage.goto(origin + '/ltl/apps/Tracking');
+    const {results} = await search(publicPage, [shipment.pro]);
+    assert.equal(results[0].shipments[0].pro, replacement);
+    assert.equal(results[0].shipments[0].status, status);
+    assert.equal(await publicPage.locator('.headline-status').evaluate(element => getComputedStyle(element).color), 'rgb(161, 37, 36)');
+  }
+  await publicPage.getByRole('button', {name:'Show Details +'}).click();
+  const highlighted = publicPage.locator('.delivery-alert-row td:nth-child(4)');
+  assert.deepEqual(await highlighted.allTextContents(), ['DELIVERY ATTEMPT FAILED', 'OUT FOR DELIVERY']);
+  assert.equal(await highlighted.first().evaluate(element => getComputedStyle(element).color), 'rgb(161, 37, 36)');
+  await snapshot(publicPage, 'delivery-alerts-mobile');
+  await publicPage.setViewportSize(baseViewport);
+  await snapshot(publicPage, 'delivery-alerts-desktop');
+  pass('Delivery updates highlighted in red', 'Both statuses appear in the detailed timeline and the latest confirmed status is highlighted in the summary');
+}
+
 try {
   if (mode === '--verify-existing') {
     const original = JSON.parse(await readFile(reportPath, 'utf8'));
@@ -168,6 +245,7 @@ try {
       'shipTo-company':'SYNTHETIC RECEIVER CO', 'shipTo-contact':'QA Recipient', 'shipTo-address':'DO NOT PUBLISH TEST ADDRESS',
       'shipTo-city':'Columbia', 'shipTo-state':'MD', 'shipTo-postalCode':'21044', 'shipTo-email':'qa-recipient@example.test',
     };
+    await page.locator('#shipment-form .form-options > summary').click();
     await fill(page, fields);
     await page.getByLabel('Service type').selectOption('LTL');
     await page.locator('[name=shareNames]').check();
@@ -298,6 +376,7 @@ try {
       await snapshot(publicPage,`tracking-${width}x${height}`);
     }
     pass('Six responsive viewports', viewportSizes.map(([w,h])=>`${w}×${h}`).join(', ') + '; no document overflow');
+    await verifyAdminWorkflows(page, publicPage, fixture);
     assert.deepEqual(consoleErrors, [], 'No uncaught page errors');
     pass('No uncaught browser errors', 'Public tracking and admin');
     report.finished = new Date().toISOString();

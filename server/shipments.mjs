@@ -4,7 +4,7 @@ import { Router } from 'express';
 export const shipmentStatuses = Object.freeze([
   'created', 'pickup_scheduled', 'picked_up', 'arrived_at_service_center',
   'departed_service_center', 'in_transit', 'delivery_appointment_scheduled',
-  'out_for_delivery', 'delivered', 'delivery_exception', 'delayed', 'cancelled',
+  'out_for_delivery', 'delivered', 'delivery_attempt_failed', 'delivery_exception', 'delayed', 'cancelled',
 ]);
 
 const uuidPattern = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
@@ -156,7 +156,8 @@ function searchPro(value) {
 
 function matchesIssuedPro(value, issued) {
   const number = text(value, 'PRO number', 36).toUpperCase();
-  return number === issued || (legacyProPattern.test(issued) && `INT-${number}` === issued);
+  return number === issued ||
+    (!numericProPattern.test(number) && legacyProPattern.test(issued) && 'INT-' + number === issued);
 }
 
 function utcOffset(minutes) {
@@ -251,7 +252,7 @@ const shipmentSelect = `SELECT s.*, t.pro_number, t.issuance, t.issued_at,
     to_char(s.pickup_date, 'YYYY-MM-DD') AS pickup_day,
     to_char(s.estimated_delivery_date, 'YYYY-MM-DD') AS delivery_day,
     row_to_json(sender) AS ship_from, row_to_json(recipient) AS ship_to
-  FROM shipments s JOIN tracking_numbers t ON t.shipment_id = s.id
+  FROM shipments s JOIN tracking_numbers t ON t.shipment_id = s.id AND t.is_current
   LEFT JOIN shipment_parties sender ON sender.shipment_id = s.id AND sender.kind = 'ship_from'
   LEFT JOIN shipment_parties recipient ON recipient.shipment_id = s.id AND recipient.kind = 'ship_to'`;
 
@@ -286,15 +287,18 @@ function shipmentFilter(query) {
   const parameters = [];
   const parameter = value => `$${parameters.push(value)}`;
   const q = text(query.q, 'Search', 100);
+  const pro = text(query.pro, 'PRO number', 36);
   const status = text(query.status, 'Status', 48);
   const from = date(query.from, 'From date');
   const to = date(query.to, 'To date');
   dateRange(from, to);
   if (q) {
     const needle = parameter(q.toUpperCase());
-    clauses.push(`(strpos(t.pro_number, ${needle}) > 0 OR strpos(upper(s.bol), ${needle}) > 0
+    clauses.push(`(EXISTS (SELECT 1 FROM tracking_numbers n WHERE n.shipment_id=s.id AND strpos(n.pro_number, ${needle}) > 0)
+      OR strpos(upper(s.bol), ${needle}) > 0
       OR strpos(upper(s.po), ${needle}) > 0 OR strpos(upper(s.reference), ${needle}) > 0)`);
   }
+  if (pro) clauses.push(`EXISTS (SELECT 1 FROM tracking_numbers n WHERE n.shipment_id=s.id AND n.pro_number=${parameter(searchPro(pro))})`);
   if (status) clauses.push(`s.status = ${parameter(selection(status, shipmentStatuses, 'shipment status'))}`);
   if (from) clauses.push(`s.created_at >= ${parameter(from)}::date::timestamp AT TIME ZONE 'UTC'`);
   if (to) clauses.push(`s.created_at < (${parameter(to)}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
@@ -326,6 +330,20 @@ async function issuePro(client, shipmentId, requested) {
   }
   if (requested) fail(409, 'That PRO number has already been issued.');
   fail(503, 'A unique PRO number could not be issued. Try again.');
+}
+
+async function replacePro(client, shipment, value) {
+  if (matchesIssuedPro(value, shipment.pro)) return null;
+  const requested = manualPro(value);
+  if (!requested) fail(400, 'A replacement PRO number must contain exactly 9 digits.');
+  const existing = await client.query('SELECT 1 FROM tracking_numbers WHERE pro_number=$1', [requested]);
+  if (existing.rowCount) fail(409, 'That PRO number has already been issued.');
+  const retired = await client.query(
+    'UPDATE tracking_numbers SET is_current=false WHERE pro_number=$1 AND shipment_id=$2 AND is_current',
+    [shipment.pro, shipment.id],
+  );
+  if (retired.rowCount !== 1) throw new Error('Shipment has no current PRO to replace.');
+  return issuePro(client, shipment.id, requested);
 }
 
 async function lockShipmentReferences(client) {
@@ -468,7 +486,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
   router.get('/stats', async (req, res) => {
     const { where, parameters } = shipmentFilter(req.query);
     const { rows } = await pool.query(`SELECT s.status, count(*)::int AS count FROM shipments s
-      JOIN tracking_numbers t ON t.shipment_id = s.id ${where} GROUP BY s.status`, parameters);
+      JOIN tracking_numbers t ON t.shipment_id = s.id AND t.is_current ${where} GROUP BY s.status`, parameters);
     const byStatus = Object.fromEntries(shipmentStatuses.map(status => [status, 0]));
     let total = 0;
     for (const row of rows) {
@@ -483,7 +501,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
     const { limit, offset } = page(req.query);
     const result = await transaction(pool, async client => {
       const count = await client.query(`SELECT count(*)::int AS total FROM shipments s
-        JOIN tracking_numbers t ON t.shipment_id = s.id ${where}`, parameters);
+        JOIN tracking_numbers t ON t.shipment_id = s.id AND t.is_current ${where}`, parameters);
       const { rows } = await client.query(`${shipmentSelect} ${where} ORDER BY s.created_at DESC, s.id
         LIMIT $${parameters.length + 1} OFFSET $${parameters.length + 2}`, [...parameters, limit, offset]);
       return { shipments: rows.map(mapShipment), total: count.rows[0].total };
@@ -525,9 +543,6 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
     const shipment = await transaction(pool, async client => {
       await lockShipment(client, shipmentId, body.version);
       const previous = await getShipment(client, shipmentId);
-      if (Object.hasOwn(body, 'pro') && !matchesIssuedPro(body.pro, previous.pro)) {
-        fail(400, 'An issued PRO number is permanent.');
-      }
       if (Object.hasOwn(body, 'status') && body.status !== previous.status) {
         fail(400, 'Record a confirmed tracking event to change a shipment status.');
       }
@@ -536,6 +551,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
         shipTo: body.shipTo === undefined ? previous.shipTo : { ...previous.shipTo, ...object(body.shipTo, 'Ship to') },
       });
       if (draft.bol !== previous.bol || draft.po !== previous.po) await lockShipmentReferences(client);
+      const replacement = Object.hasOwn(body, 'pro') ? await replacePro(client, previous, body.pro) : null;
       await client.query(`UPDATE shipments SET service=$1, bol=$2, po=$3, reference=$4, pickup_date=$5,
         estimated_delivery_date=$6, pieces=$7, weight=$8, weight_unit=$9, trailer=$10, instructions=$11,
         share_names=$12, share_details=$13, version=version+1, updated_at=clock_timestamp() WHERE id=$14`,
@@ -544,6 +560,10 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
       await writeParty(client, shipmentId, 'ship_to', draft.shipTo);
       await audit(client, { actorId: req.user.id, action: 'shipment.updated', targetType: 'shipment', targetId: shipmentId,
         metadata: { fields: Object.keys(draft).filter(field => Object.hasOwn(body, field)), version: previous.version + 1 } });
+      if (replacement) {
+        await audit(client, { actorId: req.user.id, action: 'shipment.pro_changed', targetType: 'shipment', targetId: shipmentId,
+          metadata: { previousPro: previous.pro, pro: replacement } });
+      }
       return getShipment(client, shipmentId);
     });
     res.json({ shipment });
@@ -617,9 +637,9 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
     const { rows, total } = await transaction(pool, async client => {
       const where = `(strpos(upper(concat_ws(' ', p.company, p.contact, p.city, p.email, t.pro_number)), $1) > 0 OR $1 = '')`;
       const count = await client.query(`SELECT count(*)::int AS total FROM shipment_parties p
-        JOIN tracking_numbers t ON t.shipment_id = p.shipment_id WHERE ${where}`, [query]);
+        JOIN tracking_numbers t ON t.shipment_id = p.shipment_id AND t.is_current WHERE ${where}`, [query]);
       const result = await client.query(`SELECT p.*, t.pro_number FROM shipment_parties p
-        JOIN tracking_numbers t ON t.shipment_id = p.shipment_id WHERE ${where} ORDER BY p.company, p.shipment_id, p.kind
+        JOIN tracking_numbers t ON t.shipment_id = p.shipment_id AND t.is_current WHERE ${where} ORDER BY p.company, p.shipment_id, p.kind
         LIMIT $2 OFFSET $3`, [query, limit, offset]);
       return { rows: result.rows, total: count.rows[0].total };
     }, true);
@@ -762,8 +782,14 @@ async function proMatches(client, query) {
     fail(400, 'Enter between 1 and 25 PRO numbers, one per line.');
   }
   const queries = [...new Set(query.numbers.map(searchPro))];
-  const { rows } = await client.query(`${shipmentSelect} WHERE t.pro_number=ANY($1::text[])`, [queries]);
-  return { rows, queries };
+  const { rows: numbers } = await client.query(
+    'SELECT pro_number, shipment_id FROM tracking_numbers WHERE pro_number=ANY($1::text[])',
+    [queries],
+  );
+  const matches = new Map(numbers.map(number => [number.pro_number, number.shipment_id]));
+  const shipmentIds = [...new Set(matches.values())];
+  const { rows } = await client.query(`${shipmentSelect} WHERE s.id=ANY($1::uuid[])`, [shipmentIds]);
+  return { rows, queries, matches };
 }
 
 async function publicResults(client, rows, verified, signDocumentKey) {
@@ -792,11 +818,14 @@ function mountPublicTracking(router, { pool, signDocumentKey }) {
     const mode = selection(body.mode, ['reference', 'pro'], 'tracking search type');
     const verified = mode === 'reference';
     const results = await transaction(pool, async client => {
-      const { rows, queries } = await (verified ? referenceMatches(client, body) : proMatches(client, body));
+      const { rows, queries, matches } = await (verified ? referenceMatches(client, body) : proMatches(client, body));
       const shipments = await publicResults(client, rows, verified, signDocumentKey);
       if (verified) return [{ query: queries[0], shipments }];
-      const byPro = Map.groupBy(shipments, shipment => shipment.pro);
-      return queries.map(query => ({ query, shipments: byPro.get(query) ?? [] }));
+      const byId = new Map(rows.map((row, index) => [row.id, shipments[index]]));
+      return queries.map(query => {
+        const shipment = byId.get(matches.get(query));
+        return { query, shipments: shipment ? [shipment] : [] };
+      });
     }, true);
     res.json({ results });
   });

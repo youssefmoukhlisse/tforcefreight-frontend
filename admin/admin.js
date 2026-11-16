@@ -250,12 +250,12 @@ function go(hash) {
 
 function routeFromHash() {
   const parts = location.hash.slice(1).split('/');
-  return { view: parts[0] || 'overview', shipment: parts[1] || '', tab: parts[2] || 'summary' };
+  return { view: parts[0] || 'overview', shipment: parts[1] || '', tab: parts[2] || 'summary', action: parts[3] || '' };
 }
 
 async function renderRoute() {
   if (!state.user) return;
-  const { view, shipment, tab } = routeFromHash();
+  const { view, shipment, tab, action } = routeFromHash();
   const activeId = ++state.renderId;
   const active = () => state.renderId === activeId && Boolean(state.user);
   const context = { user: state.user, config: state.config, active, go, refresh: renderRoute, notice: message => { state.notice = message; } };
@@ -273,7 +273,7 @@ async function renderRoute() {
     if (view === 'new' && canEditShipment(state.user)) {
       renderNewShipment(container, context);
     } else if (view === 'shipment' && /^[0-9a-f-]{36}$/i.test(shipment)) {
-      await renderShipment(container, context, shipment, tab);
+      await renderShipment(container, context, shipment, tab, action);
     } else if (['overview', 'shipments', 'numbers', 'events', 'documents'].includes(view) && (view !== 'documents' || state.user.role === 'admin')) {
       await renderShipmentList(container, context, view);
     } else if (view === 'customers') {
@@ -299,7 +299,7 @@ async function renderRoute() {
   document.title = `${pageTitle?.textContent || 'Administration'} | Shipment Desk`;
   if (pageTitle) {
     pageTitle.tabIndex = -1;
-    pageTitle.focus({ preventScroll: true });
+    if (!container.contains(document.activeElement)) pageTitle.focus({ preventScroll: true });
   }
 }
 

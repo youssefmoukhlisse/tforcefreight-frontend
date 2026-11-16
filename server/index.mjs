@@ -6,6 +6,7 @@ import { migrate, databasePool } from './database.mjs';
 import { createAuth, audit } from './auth.mjs';
 import { createShipmentRouters } from './shipments.mjs';
 import { createNotifications } from './notifications.mjs';
+import { createCustomerImportRouter } from './customers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const environment = process.env.APP_ENV || (process.env.NODE_ENV === 'production' ? 'production' : 'development');
@@ -88,6 +89,7 @@ if (enabled) {
     next();
   });
   app.use('/api/tracking', notifications.publicTracking, publicTracking);
+  app.use('/api/admin/customers', createCustomerImportRouter({ pool, requireAuth, requireRole, audit }));
   app.use('/api/admin', notifications.admin, admin);
   cleanup = setInterval(() => {
     pool.query('DELETE FROM public_request_limits WHERE bucket < $1', [Math.floor(Date.now() / 60_000) - 60])
