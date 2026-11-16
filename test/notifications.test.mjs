@@ -16,7 +16,7 @@ const dbUrl = process.env.TEST_NOTIFICATION_DATABASE_URL || process.env.TEST_SHI
 
 test('shipment notifications require opt-in, protect addresses, and dispatch confirmed status once', {
   skip: !dbUrl && 'Set TEST_NOTIFICATION_DATABASE_URL to an isolated loopback PostgreSQL database.',
-  timeout: 28_000,
+  timeout: 45_000,
 }, async t => {
   assert.match(new URL(dbUrl).hostname, /^(?:127\.0\.0\.1|localhost|\[::1\])$/);
   const database = new pg.Pool({ connectionString: dbUrl });
@@ -33,7 +33,8 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   });
   await database.query('CREATE SCHEMA ' + schema);
   pool = new pg.Pool({ connectionString: dbUrl, options: '-c search_path=' + schema });
-  for (const file of ['001-auth.sql', '002-shipments.sql', '003-notifications.sql', '004-numeric-tracking-numbers.sql']) {
+  for (const file of ['001-auth.sql', '002-shipments.sql', '003-notifications.sql', '004-numeric-tracking-numbers.sql',
+    '005-notification-preferences.sql']) {
     await pool.query(await readFile(new URL('../server/migrations/' + file, import.meta.url), 'utf8'));
   }
 
@@ -192,4 +193,88 @@ test('shipment notifications require opt-in, protect addresses, and dispatch con
   assert.equal(history.status, 200, history.body.error);
   assert.equal(history.body.subscriptions[0].state, 'revoked');
   assert.deepEqual(history.body.logs.map(log => log.status).sort(), ['canceled', 'sent', 'sent']);
+
+  await t.test('multiple recipients confirm selected options independently before receiving personalized updates', async () => {
+    const originAddress = 'qa-origin@example.invalid';
+    const destinationAddress = 'qa-destination@example.invalid';
+    const outsider = 'qa-unrelated@example.invalid';
+    const note = 'Check the appointment at the receiving desk.';
+    const reply = await request('/api/admin/shipments', {
+      pro: '000000444', service, pieces: 1, weight: 100, weightUnit: 'lb',
+      shipFrom: { city: 'Albany', state: 'NY', postalCode: '12207', country: 'US', email: originAddress },
+      shipTo: { city: 'Boston', state: 'MA', postalCode: '02108', country: 'US', email: destinationAddress },
+    }, { role: 'admin' });
+    assert.equal(reply.status, 201, reply.body.error);
+    const shipment = reply.body.shipment;
+    const input = {
+      pro: shipment.pro,
+      emails: [destinationAddress, ` ${destinationAddress.toUpperCase()} `, originAddress, outsider],
+      events: ['current_status', 'delivery_appointment_scheduled', 'current_status'],
+      personalMessage: ` ${note} `,
+      senderEmail: originAddress.toUpperCase(),
+    };
+    const update = body => request(subscriptionsPath, body);
+    for (const invalidInput of [
+      { ...input, emails: Array(7).fill(destinationAddress) }, { ...input, emails: ['invalid'] },
+      { ...input, events: [] }, { ...input, events: ['unknown_status'] },
+      { ...input, senderEmail: '' }, { ...input, personalMessage: 'x'.repeat(151) },
+    ]) assert.equal((await update(invalidInput)).status, 400);
+
+    const wrongSender = await update({ ...input, senderEmail: outsider });
+    assert.equal(wrongSender.status, 202);
+    const listSubscriptions = async () => (await pool.query(`SELECT email,state,event_options,personal_message
+      FROM notification_subscriptions WHERE shipment_id=$1 ORDER BY email`, [shipment.id])).rows;
+    assert.deepEqual(await listSubscriptions(), []);
+    const [requested, duplicate] = await Promise.all([update(input), update({ ...input, emails: [...input.emails].reverse() })]);
+    for (const generic of [requested, duplicate]) {
+      assert.equal(generic.status, 202, generic.body.error);
+      assert.deepEqual(generic.body, wrongSender.body);
+    }
+    assert.deepEqual(await listSubscriptions(), [destinationAddress, originAddress].map(address => ({
+      email: address, state: 'pending', event_options: ['current_status', 'delivery_appointment_scheduled'], personal_message: note,
+    })));
+
+    const beforeConsent = await waitFor(() => sent.length >= 4 && sent.slice(2));
+    assert.deepEqual(beforeConsent.map(message => message.to).sort(), [destinationAddress, originAddress]);
+    for (const message of beforeConsent) {
+      assert.equal(message.subject, 'Confirm shipment updates');
+      assert.ok(!message.text.includes(note));
+      assert.equal(message.replyTo, undefined);
+    }
+    const chosen = beforeConsent.find(message => message.to === destinationAddress);
+    const chosenToken = token(chosen, 'confirm');
+    const confirms = await Promise.all([confirmation(chosenToken), confirmation(chosenToken)]);
+    assert.deepEqual(confirms.map(result => result.status), [200, 200]);
+    assert.deepEqual((await listSubscriptions()).map(row => row.state), ['active', 'pending']);
+    const snapshot = await waitFor(() => sent[4]);
+    assert.equal(snapshot.to, destinationAddress);
+    assert.equal(snapshot.subject, 'Current shipment status: Shipment created');
+    assert.ok(snapshot.text.includes(note));
+    assert.ok(!snapshot.text.includes(originAddress));
+    assert.equal(snapshot.replyTo, undefined);
+
+    let shipmentVersion = shipment.version;
+    async function recordOption(status, kind, eventTime) {
+      const result = await request(`/api/admin/shipments/${shipment.id}/events`, {
+        version: shipmentVersion, status, eventTime, eventDate: '2024-04-12', kind, timeZone: 'America/New_York',
+        city: 'Boston', state: 'MA', country: 'US', source: 'Staging fixture',
+      }, { role: 'admin' });
+      assert.equal(result.status, 201, result.body.error);
+      shipmentVersion = result.body.shipment.version;
+    }
+    await recordOption('out_for_delivery', 'confirmed', '10:00');
+    await recordOption('delivery_appointment_scheduled', 'expected', '12:00');
+    const logTypes = async () => (await pool.query(`SELECT n.type FROM notification_logs n
+      JOIN notification_subscriptions s ON s.id=n.subscription_id WHERE s.shipment_id=$1 ORDER BY n.type`, [shipment.id])).rows.map(row => row.type);
+    assert.deepEqual(await logTypes(), ['confirmation', 'confirmation', 'current_status']);
+    await recordOption('delivery_appointment_scheduled', 'confirmed', '13:00');
+    const appointment = await waitFor(() => sent[5]);
+    assert.equal(appointment.to, destinationAddress);
+    assert.equal(appointment.subject, 'Shipment update: Delivery appointment scheduled');
+    assert.ok(appointment.text.includes(note));
+    assert.equal(appointment.replyTo, undefined);
+    assert.equal((await unsubscribe(token(appointment, 'unsubscribe'))).status, 200);
+    assert.deepEqual(await logTypes(), ['confirmation', 'confirmation', 'current_status', 'status']);
+    assert.deepEqual((await listSubscriptions()).map(row => row.state), ['revoked', 'pending']);
+  });
 });

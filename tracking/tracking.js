@@ -8,9 +8,16 @@ const output = get('track-output');
 const loading = get('track-loading');
 const trackButton = get('track-submit');
 const dialog = get('update-dialog');
+const updateForm = get('update-form');
+const updateRecipients = get('update-recipients');
+const addRecipientButton = get('add-update-recipient');
+const sendUpdatesButton = get('send-updates');
+const maxUpdateRecipients = 6;
 let config = { notificationsEnabled: false };
 let currentRequest;
 let subscribePro;
+let recipientSequence = 0;
+let updatesRequest;
 
 const steps = {
   created: ['Shipment Created', 'A shipment record has been created.', 10, 'pending'],
@@ -113,7 +120,7 @@ function renderShipment(shipment, id) {
           ${pair('Service', visible(shipment.service))}
         </dl>
         <div class="summary-actions">
-          <button class="primary" type="button" data-updates="${escapeHtml(shipment.pro)}" data-eligible="${Boolean(shipment.canSubscribe)}">Send Updates</button>
+          <button class="primary" type="button" data-updates="${escapeHtml(shipment.pro)}" data-eligible="${Boolean(shipment.canSubscribe)}" data-delivered="${isDelivered}">Send Updates</button>
           <button class="text-link" type="button" data-details-toggle="${id}" aria-controls="details-${id}" aria-expanded="false">Show Details +</button>
         </div>
       </section>
@@ -241,31 +248,111 @@ results.addEventListener('click', event => {
     if (open) get('progress-' + id).focus({ preventScroll: true });
     else show.focus();
   }
-  if ('updates' in button.dataset) {
-    subscribePro = button.dataset.updates;
-    const available = config.notificationsEnabled && button.dataset.eligible === 'true';
-    const email = get('update-email');
-    email.value = '';
-    email.hidden = !available;
-    dialog.querySelector('[for="update-email"]').hidden = !available;
-    dialog.querySelector('button[type="submit"]').hidden = !available;
-    dialog.querySelector('#update-form > p:first-of-type').hidden = !available;
-    get('update-message').textContent = available ? '' : 'Email updates are currently unavailable for this shipment.';
-    dialog.showModal();
-  }
+  if ('updates' in button.dataset) openUpdates(button);
 });
 
-get('close-updates').addEventListener('click', () => dialog.close());
-get('update-form').addEventListener('submit', async event => {
+function addUpdateRecipient() {
+  const count = updateRecipients.children.length;
+  if (count >= maxUpdateRecipients) return;
+  const row = get('update-recipient-template').content.firstElementChild.cloneNode(true);
+  const input = row.querySelector('input');
+  input.id = 'update-recipient-' + ++recipientSequence;
+  row.querySelector('label').htmlFor = input.id;
+  row.querySelector('[data-remove-recipient]').hidden = count === 0;
+  updateRecipients.append(row);
+  addRecipientButton.disabled = count + 1 >= maxUpdateRecipients;
+  if (count) input.focus();
+}
+
+function updateFeedback(message) {
+  const feedback = get('update-message');
+  feedback.textContent = message;
+  feedback.hidden = !message;
+}
+
+function openUpdates(button) {
+  updatesRequest?.abort();
+  updatesRequest = undefined;
+  subscribePro = button.dataset.updates;
+  updateForm.reset();
+  updateRecipients.replaceChildren();
+  recipientSequence = 0;
+  addUpdateRecipient();
+  const delivered = button.dataset.delivered === 'true';
+  for (const option of updateForm.querySelectorAll('[data-future-event]')) option.hidden = delivered;
+  updateForm.querySelector('[value="current_status"]').disabled = delivered;
+  get('update-pro').textContent = subscribePro;
+  get('update-characters').textContent = '(Up to 150 characters)';
+  get('update-complete').hidden = true;
+  updateForm.hidden = false;
+  const available = config.notificationsEnabled && button.dataset.eligible === 'true';
+  sendUpdatesButton.disabled = !available;
+  updateFeedback(available ? '' : 'Email updates are currently unavailable for this shipment.');
+  dialog.showModal();
+  get('close-updates').focus({ preventScroll: true });
+  dialog.scrollTop = 0;
+}
+
+addRecipientButton.addEventListener('click', addUpdateRecipient);
+updateRecipients.addEventListener('click', event => {
+  const action = event.target.closest('[data-reset-recipient], [data-remove-recipient]');
+  if (!action) return;
+  const row = action.closest('.update-recipient');
+  if ('removeRecipient' in action.dataset) {
+    row.remove();
+    addRecipientButton.disabled = false;
+    addRecipientButton.focus();
+  } else {
+    const input = row.querySelector('input');
+    input.value = '';
+    input.focus();
+  }
+});
+get('update-personal').addEventListener('input', event => {
+  get('update-characters').textContent = `(${event.target.maxLength - event.target.value.length} characters left)`;
+});
+for (const id of ['close-updates', 'cancel-updates', 'done-updates']) {
+  get(id).addEventListener('click', () => dialog.close());
+}
+dialog.addEventListener('close', () => {
+  if (!dialog.open) updatesRequest?.abort();
+});
+updateForm.addEventListener('submit', async event => {
   event.preventDefault();
-  if (!config.notificationsEnabled || !subscribePro) return;
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  button.disabled = true;
+  if (sendUpdatesButton.disabled || !subscribePro) return;
+  const events = [...updateForm.querySelectorAll('[name="event"]:checked')].map(option => option.value);
+  if (!events.length) {
+    updateFeedback('Please select an option to send updates.');
+    return;
+  }
+  const fields = new FormData(updateForm);
+  const emails = fields.getAll('recipient').map(email => email.trim());
+  if (new Set(emails.map(email => email.toLowerCase())).size !== emails.length) {
+    updateFeedback('Enter each recipient email address once.');
+    return;
+  }
+  const request = new AbortController();
+  updatesRequest = request;
+  sendUpdatesButton.disabled = true;
+  updateFeedback('');
   try {
-    const data = await api('/api/tracking/subscriptions', { body: { pro: subscribePro, email: get('update-email').value.trim() } });
-    get('update-message').textContent = data.message;
-  } catch (error) { get('update-message').textContent = error.message; }
-  finally { button.disabled = false; }
+    const data = await api('/api/tracking/subscriptions', { signal: request.signal, body: {
+      pro: subscribePro, emails, events, personalMessage: fields.get('personalMessage').trim(),
+      senderEmail: fields.get('senderEmail').trim(),
+    } });
+    if (!dialog.open || updatesRequest !== request) return;
+    updateForm.hidden = true;
+    get('update-complete').hidden = false;
+    get('update-complete-message').textContent = data.message;
+    get('done-updates').focus();
+  } catch (error) {
+    if (error.name !== 'AbortError' && dialog.open && updatesRequest === request) updateFeedback(error.message);
+  } finally {
+    if (updatesRequest === request) {
+      updatesRequest = undefined;
+      sendUpdatesButton.disabled = false;
+    }
+  }
 });
 
 api('/api/config').then(data => {

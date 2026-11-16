@@ -60,14 +60,50 @@
   </main>
   <div id="portal-site-footer"></div>
   <dialog id="update-dialog" aria-labelledby="update-title">
+    <header class="update-header">
+      <h2 id="update-title">Send updates for <span id="update-pro"></span></h2>
+      <button type="button" class="update-close" id="close-updates" aria-label="Close">×</button>
+    </header>
     <form id="update-form">
-      <h2 id="update-title">Send shipment updates</h2>
-      <p>Enter the email address on your shipment. If it matches, we will send a confirmation link before enabling updates.</p>
-      <label for="update-email">Email address</label>
-      <input id="update-email" type="email" autocomplete="email" maxlength="254" required>
-      <p id="update-message" role="status"></p>
-      <div class="dialog-actions"><button class="primary" type="submit">Request updates</button><button class="secondary" type="button" id="close-updates">Close</button></div>
+      <fieldset class="update-events" id="update-events">
+        <legend>When should we send updates? *</legend>
+        <label><input type="checkbox" name="event" value="current_status" checked>Current Status</label>
+        <label data-future-event><input type="checkbox" name="event" value="delivery_exception">Delivery Exceptions</label>
+        <label data-future-event><input type="checkbox" name="event" value="out_for_delivery">Out for Delivery</label>
+        <label data-future-event><input type="checkbox" name="event" value="delivered">Shipment Delivered</label>
+        <label data-future-event><input type="checkbox" name="event" value="delivery_appointment_scheduled">Delivery Appointment Scheduled</label>
+      </fieldset>
+      <div class="update-recipients" id="update-recipients"></div>
+      <button type="button" class="update-link" id="add-update-recipient">+ Add Another Recipient</button>
+      <div class="update-personal">
+        <label for="update-personal">Personal Message (Applies to all email notifications)</label>
+        <textarea id="update-personal" name="personalMessage" rows="3" maxlength="150" aria-describedby="update-characters"></textarea>
+        <p id="update-characters" class="update-characters">(Up to 150 characters)</p>
+      </div>
+      <div class="update-sender">
+        <label for="update-sender">Your Email *</label>
+        <input id="update-sender" name="senderEmail" type="email" autocomplete="email" maxlength="254" required>
+        <p class="update-note"><strong>Note:</strong> Use email addresses listed on this shipment. Recipients confirm by email before updates begin.</p>
+      </div>
+      <p id="update-message" class="update-feedback" role="status" hidden></p>
+      <div class="dialog-actions"><button class="primary" type="submit" id="send-updates">Send</button><button class="secondary" type="button" id="cancel-updates">Cancel</button></div>
     </form>
+    <div id="update-complete" class="update-complete" hidden>
+      <p id="update-complete-message" role="status"></p>
+      <button type="button" class="secondary" id="done-updates">Close</button>
+    </div>
+    <template id="update-recipient-template">
+      <div class="update-recipient">
+        <div class="update-recipient-heading">
+          <label>Email *</label>
+          <div class="update-recipient-actions">
+            <button type="button" class="update-link" data-reset-recipient>Reset</button>
+            <button type="button" class="update-close" data-remove-recipient aria-label="Remove recipient">×</button>
+          </div>
+        </div>
+        <input name="recipient" type="email" autocomplete="off" maxlength="254" required>
+      </div>
+    </template>
   </dialog>
 </body>
 </html>

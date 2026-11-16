@@ -37,7 +37,9 @@ Authenticated writes require same-origin JSON and a valid session. Search uses J
 
 ## Email
 
-Staging never sends live email. For a future production release, the operator must set and verify an authorized SMTP host, port, sender, and credentials in Railway (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `RECORDS_EMAIL_ENABLED=true`). Confirm the provider permits transactional mail from the configured sender. Subscription requests return a generic result and only enqueue confirmation for an address already attached to the shipment. The recipient must confirm; a signed unsubscribe link is included with qualifying status emails. The worker rechecks the active subscription and current confirmed event before dispatching.
+Staging never sends live email. To enable production email, configure an authorized SMTP host, port, sender, and credentials in Railway (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `RECORDS_EMAIL_ENABLED=true`). Confirm the provider permits transactional mail from the configured sender.
+
+Send Updates accepts up to six recipient entries and returns a generic result. The requester and eligible recipients must use email addresses attached to the shipment. Each recipient confirms separately. Current Status sends a snapshot after confirmation. The other options send updates when a selected confirmed event becomes the current status. An optional personal message appears in the updates, which include a signed unsubscribe link.
 
 ## Verification
 
