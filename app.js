@@ -286,14 +286,17 @@ function operationalSubmit(event) {
   if (!message.parentNode) (event.currentTarget.classList.contains('track-form') ? event.currentTarget.parentElement : event.currentTarget).append(message);
 }
 
+const portalHeader = document.getElementById('portal-site-header');
+const portalFooter = document.getElementById('portal-site-footer');
+
 document.addEventListener('click', event => {
   if (!event.target.closest('.nav-item')) closeDesktopMenus();
   if (!event.target.closest('.site-header')) { closeMobileMenu(); closeSearch(); }
-  const appRoot = document.getElementById('app');
-  if (appRoot && event.target.closest('[data-cookie-settings]')) {
+  const cookieMount = portalFooter || document.getElementById('app');
+  if (cookieMount && event.target.closest('[data-cookie-settings]')) {
     event.preventDefault();
     sessionStorage.removeItem('tff-cookie-dismissed');
-    if (!document.querySelector('.cookie-notice')) appRoot.insertAdjacentHTML('beforeend', cookieNotice());
+    if (!document.querySelector('.cookie-notice')) cookieMount.insertAdjacentHTML('beforeend', cookieNotice());
     bindCookieOnly();
     document.querySelector('.cookie-close')?.focus();
   }
@@ -308,9 +311,9 @@ document.addEventListener('keydown', event => {
   opener?.focus();
 });
 
-const portalHeader = document.getElementById('portal-site-header');
 if (portalHeader) {
   portalHeader.innerHTML = header();
+  if (portalFooter) portalFooter.innerHTML = footer();
   bindHeaderControls();
 } else {
   window.addEventListener('popstate', () => render());

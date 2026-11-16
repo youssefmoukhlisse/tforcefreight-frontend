@@ -7,6 +7,7 @@ body{background:#fdfdfd}
 .sr-only,.skip:not(:focus){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .skip:focus{position:fixed;z-index:60;inset:8px auto auto 8px;background:white;padding:12px}
 .page{max-width:1452px;margin-inline:auto;padding-inline:26px}
+#shipment-updates{padding-block-end:35px}
 .environment {
   font-size: 10px;
   font-weight: 700;
