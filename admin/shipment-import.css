@@ -1,0 +1,46 @@
+.shipment-import .shipment-import-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 480px) auto;
+  align-items: start;
+  justify-content: start;
+  gap: 9px 12px;
+  margin-bottom: 14px;
+}
+.shipment-import .shipment-import-picker > .button {
+  align-self: start;
+  margin-top: 26px;
+}
+.shipment-import .shipment-import-picker > .feedback {
+  grid-column: 1 / -1;
+}
+.shipment-import .shipment-import-confirm {
+  margin-top: 15px;
+}
+.shipment-import #shipment-import-output .table-wrap {
+  max-height: 460px;
+}
+.shipment-import #shipment-import-output th {
+  position: sticky;
+  top: 0;
+}
+.shipment-import #shipment-import-output .feedback ~ .table-wrap,
+.shipment-import #shipment-import-output .form-actions + .table-wrap,
+.shipment-import #shipment-import-output .form-actions + .feedback + .table-wrap {
+  margin-top: 14px;
+}
+
+@media (max-width: 540px) {
+  .shipment-import .shipment-import-picker {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  .shipment-import .shipment-import-picker .field {
+    width: 100%;
+  }
+  .shipment-import .shipment-import-picker > .button {
+    margin-top: 0;
+  }
+  .shipment-import .panel-heading {
+    flex-wrap: wrap;
+  }
+}

@@ -232,6 +232,7 @@ function clearResults() {
 form.querySelector('.track-switch').addEventListener('change', () => { syncMode(); clearResults(); });
 form.addEventListener('reset', () => {
   clearResults();
+  if (linkedPro()) history.replaceState(null, '', location.pathname + location.search);
   // The native reset applies its default values after dispatching the reset event.
   setTimeout(syncMode, 0);
 });
@@ -362,8 +363,27 @@ api('/api/config').then(data => {
   get('environment-badge').hidden = data.environment !== 'staging';
 }).catch(() => {});
 
+function linkedPro() {
+  const pro = new URLSearchParams(location.hash.slice(1)).get('pro');
+  return /^[0-9]{9}$/.test(pro) ? pro : '';
+}
+
+function searchFor(numbers) {
+  get('mode-pro').checked = true;
+  syncMode();
+  clearResults();
+  get('track-numbers').value = numbers;
+  form.requestSubmit();
+}
+
+window.addEventListener('hashchange', () => {
+  const pro = linkedPro();
+  if (pro) searchFor(pro);
+});
+
+let initialSearch = linkedPro();
 try {
-  const previousNumber = sessionStorage.getItem('independent-tracking-search');
+  initialSearch ||= sessionStorage.getItem('independent-tracking-search');
   sessionStorage.removeItem('independent-tracking-search');
-  if (previousNumber) { get('track-numbers').value = previousNumber; form.requestSubmit(); }
 } catch {}
+if (initialSearch) searchFor(initialSearch);

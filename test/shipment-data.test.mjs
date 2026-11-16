@@ -70,6 +70,7 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     VALUES ($1,'ship_from','Albany','NY','12207','US'), ($1,'ship_to','Boston','MA','02108','US')`, [legacy.id]);
   await pool.query(await readFile(new URL('../server/migrations/004-numeric-tracking-numbers.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../server/migrations/007-pro-aliases.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('../server/migrations/009-bulk-shipment-imports.sql', import.meta.url), 'utf8'));
   function requireAuth(req, res, next) {
     const user = users.get(req.get('X-Fixture-Role'));
     if (!user) return res.status(401).json({ error: 'Authentication required.' });
@@ -364,5 +365,87 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     assert.equal(edited.status, 200, edited.body.error);
     assert.equal(edited.body.shipment.bol, '');
     assert.equal(edited.body.shipment.po, first.po);
+  });
+
+  await t.test('bulk imports validate everything, preserve row order, and retry without creating duplicates', async subtest => {
+    const bulk = shipments + '/bulk';
+    const importId = randomUUID();
+    const rows = [
+      { ...draft, reference: 'QA-BULK-FIRST', bol: '', po: '' },
+      { ...draft, reference: 'QA-BULK-SECOND', bol: '12345555555', po: 'ca0122600073a' },
+    ];
+    const send = (value, role = 'operator') => change(bulk, value, 'POST', role);
+    const importCount = async () => (await pool.query("SELECT count(*)::int AS count FROM shipments WHERE reference LIKE 'QA-BULK-%'")).rows[0].count;
+    assert.equal((await request(bulk, { method: 'POST', data: { importId, shipments: rows } })).status, 401);
+    assert.equal((await send({ importId, shipments: rows }, 'viewer')).status, 403);
+    assert.equal((await send({ importId: 'invalid', shipments: rows })).status, 400);
+    assert.equal((await send({ importId, shipments: Array(101).fill(rows[0]) })).status, 400);
+    const invalidRows = await send({ importId, shipments: [rows[0], { ...rows[1], weight: 0 }, { ...rows[1], pro: '123456789' }] });
+    assert.equal(invalidRows.status, 400);
+    assert.deepEqual(invalidRows.body.errors.map(entry => entry.row), [2, 3]);
+    assert.equal(await importCount(), 0);
+
+    let draw = 0;
+    const randomInt = crypto.randomInt;
+    subtest.mock.method(crypto, 'randomInt', (min, max) => {
+      if (max === 100_000_000_000) return 12_345_555_555 + (draw++ % 2);
+      if (min === 100_000 && max === undefined) return 73;
+      return randomInt(min, max);
+    });
+    syncBuiltinESMExports();
+    subtest.after(() => {
+      subtest.mock.restoreAll();
+      syncBuiltinESMExports();
+    });
+
+    const payload = { importId, shipments: rows };
+    const replies = await Promise.all([send(payload), send({ ...payload, importId: importId.toUpperCase() })]);
+    assert.deepEqual(replies.map(result => result.status).sort(), [200, 201], JSON.stringify(replies.map(result => result.body)));
+    const first = replies.find(result => result.status === 201).body;
+    const replay = replies.find(result => result.status === 200).body;
+    assert.equal(first.replayed, false);
+    assert.equal(replay.replayed, true);
+    assert.equal(first.total, 2);
+    assert.equal(replay.importId, importId);
+    assert.deepEqual(first.shipments, replay.shipments);
+    assert.deepEqual(first.shipments.map(entry => entry.row), [1, 2]);
+    assert.ok(first.shipments.every(entry => /^[1-9][0-9]{8}$/.test(entry.pro)));
+    assert.notEqual(first.shipments[0].pro, first.shipments[1].pro);
+    assert.equal(first.shipments[0].bol, '12345555556');
+    assert.match(first.shipments[0].po, /^CA01226[0-9]{5}A$/);
+    assert.notEqual(first.shipments[0].po, 'CA0122600073A');
+    assert.equal(first.shipments[1].bol, rows[1].bol);
+    assert.equal(first.shipments[1].po, rows[1].po);
+    const lookup = await proSearch(...first.shipments.map(entry => entry.pro));
+    assert.equal(lookup.status, 200, lookup.body.error);
+    assert.deepEqual(lookup.body.results.map(result => result.shipments[0].pro), first.shipments.map(entry => entry.pro));
+    assert.equal((await send({ importId, shipments: [...rows].reverse() })).status, 409);
+    assert.equal(await importCount(), 2);
+
+    subtest.mock.restoreAll();
+    syncBuiltinESMExports();
+    const scoped = await send(payload, 'admin');
+    assert.equal(scoped.status, 201, scoped.body.error);
+    assert.notEqual(scoped.body.shipments[0].id, first.shipments[0].id);
+    assert.equal(await importCount(), 4);
+    const counts = await pool.query('SELECT count(*)::int AS count FROM audit_logs WHERE action=$1 AND target_id=$2', ['shipments.imported', importId]);
+    assert.equal(counts.rows[0].count, 2);
+  });
+
+  await t.test('an import receipt failure rolls back the shipment rows and leaves the import ID reusable', async () => {
+    const importId = randomUUID();
+    const payload = { importId, shipments: [{ ...draft, reference: 'QA-ROLLBACK-A' }, { ...draft, reference: 'QA-ROLLBACK-B' }] };
+    await pool.query(`CREATE FUNCTION reject_test_import_receipt() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Isolated receipt failure fixture'; END;
+      $$;
+      CREATE TRIGGER reject_test_import_receipt BEFORE INSERT ON shipment_imports
+      FOR EACH ROW EXECUTE FUNCTION reject_test_import_receipt()`);
+    const count = async () => (await pool.query("SELECT count(*)::int AS count FROM shipments WHERE reference LIKE 'QA-ROLLBACK-%'")).rows[0].count;
+    assert.equal((await change(shipments + '/bulk', payload)).status, 500);
+    assert.equal(await count(), 0);
+    assert.equal((await pool.query('SELECT count(*)::int AS count FROM shipment_imports WHERE import_id=$1', [importId])).rows[0].count, 0);
+    await pool.query('DROP TRIGGER reject_test_import_receipt ON shipment_imports');
+    assert.equal((await change(shipments + '/bulk', payload)).status, 201);
+    assert.equal(await count(), 2);
   });
 });

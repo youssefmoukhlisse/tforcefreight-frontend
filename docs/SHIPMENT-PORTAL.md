@@ -15,6 +15,8 @@ Leave the bill of lading or PO number blank when creating a shipment to issue th
 
 Use **Customers → Import Customers** to download a CSV template, preview up to 500 records, and import them into the private directory. Duplicate customer records are skipped. In **Tracking Numbers → Create Tracking Number**, select saved customers to fill the sender and recipient fields. Use **Edit PRO** to choose a replacement or **Update Progress** to record an event. Confirmed **Out for Delivery** and **Delivery Attempt Failed** events are highlighted in public tracking.
 
+Use **Tracking Numbers → Import Shipment CSV** for up to 100 shipments per file. Download the template, enter the shipment details, and preview the file before creating the shipment records. A successful import adds a unique nine-digit PRO for every row. **Download CSV with Tracking** returns the source columns in the original order with `pro_number` and `tracking_url` appended. Extra CSV columns are carried into the download and do not affect shipment creation. If the response is interrupted, preview and submit the same unchanged file again in the same browser tab to recover the original results.
+
 ## Database and privacy
 
 - `users`, `auth_sessions`, `auth_challenges`, `auth_password_resets`, `auth_recovery_codes`, `auth_rate_limits`, and `audit_logs` hold auth state and administrative history. Passwords are salted scrypt hashes; TOTP secrets are encrypted. Login and public lookup carry database-backed limits.
@@ -33,6 +35,7 @@ Use **Customers → Import Customers** to download a CSV template, preview up to
 | Authentication | `GET, POST /api/auth/setup`; `POST /api/auth/login`, `/mfa`, `/logout`, `/reset`, `/recover`; `GET /api/auth/session` |
 | Accounts | `GET, POST /api/auth/users`; `PATCH /api/auth/users/:id`; `POST /api/auth/users/:id/reset` |
 | Shipment admin | `GET /api/admin/stats`; `GET, POST /api/admin/shipments`; `GET, PATCH /api/admin/shipments/:id` |
+| Bulk shipment import | `POST /api/admin/shipments/bulk` (1–100 shipments with one retry ID per import) |
 | Shipment events and PDFs | `GET, POST /api/admin/shipments/:id/events` and `/documents`; `PATCH, DELETE /api/admin/shipments/:id/events/:eventId`; `GET, DELETE /api/admin/shipments/:id/documents/:documentId` |
 | Customers | `GET /api/admin/customers` (shipment contacts), `GET /api/admin/customers/imported`, `POST /api/admin/customers/import` |
 | Admin records | `GET /api/admin/audit`, `/notifications`; `PATCH /api/admin/notifications/:id` |

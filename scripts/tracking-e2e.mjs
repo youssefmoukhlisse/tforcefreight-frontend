@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
 import { totpAtStep } from '../server/auth.mjs';
+import { readCsv } from '../admin/csv.js';
 
 const [baseUrl, destination, mode] = process.argv.slice(2);
 if (!baseUrl || !destination) throw new Error('Usage: node scripts/tracking-e2e.mjs BASE_URL DESTINATION [--verify-existing]');
@@ -199,6 +200,72 @@ async function verifyAdminWorkflows(page, publicPage, fixture) {
   pass('Delivery updates highlighted in red', 'Both statuses appear in the detailed timeline and the latest confirmed status is highlighted in the summary');
 }
 
+async function verifyBulkImport(page, publicContext, fixture) {
+  await page.goto(origin + '/admin/#numbers');
+  await page.getByRole('link', {name:'Import Shipment CSV'}).click();
+  const header = 'pieces,weight,reference,from_company,from_city,from_state,from_zip,to_city,to_state,to_zip,notes';
+  const rows = [
+    `1,100,${fixture}-BULK-1,"Sender, ""A""",Hartford,CT,06103,Boston,MA,02108,"=2+2"`,
+    `2,200,${fixture}-BULK-2,Sender B,Albany,NY,12207,Newark,NJ,07102,Original text`,
+  ];
+  async function preview(csv) {
+    await page.locator('#shipment-import-file').setInputFiles({name:'shipments.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
+    await page.getByRole('button',{name:'Preview CSV'}).click();
+    await page.getByRole('heading',{name:'Import Preview'}).waitFor();
+  }
+  await preview([header, rows[0], rows[1].replace('2,200,', '0,200,')].join('\r\n'));
+  assert.equal(await page.getByRole('button',{name:'Create 2 Shipments'}).count(),0);
+  await page.getByText('Pieces must be a whole number between 1 and 1,000,000.').waitFor();
+  const contents = [header, ...rows].join('\r\n');
+  await preview(contents);
+  const bulk = '**/api/admin/shipments/bulk';
+  let original;
+  await page.route(bulk, async route => {
+    const saved = await route.fetch();
+    original = { status:saved.status(), body:await saved.json() };
+    await route.abort('failed');
+  }, {times:1});
+  await page.getByRole('button',{name:'Create 2 Shipments'}).click();
+  await page.getByText('The server could not be reached. Try again.',{exact:true}).waitFor();
+  assert.equal(original.status,201);
+  await page.reload();
+  await preview(contents);
+  const retry = page.waitForResponse(response => response.url().endsWith('/shipments/bulk') && response.request().method() === 'POST');
+  await page.getByRole('button',{name:'Create 2 Shipments'}).click();
+  const response = await retry;
+  assert.equal(response.status(),200);
+  const replay = await response.json();
+  assert.equal(replay.replayed,true);
+  assert.deepEqual(replay.shipments, original.body.shipments);
+  assert.equal(new Set(replay.shipments.map(row => row.pro)).size, 2);
+  pass('Bulk shipment creation and retry after a lost response', 'Invalid CSV cannot be submitted; retry recovered the original two shipments');
+
+  const fileReady = page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download CSV with Tracking'}).click();
+  const download = await fileReady;
+  assert.equal(download.suggestedFilename(),'shipments-with-tracking.csv');
+  const csv = await readFile(await download.path(),'utf8');
+  const {records} = readCsv(csv, {maxRows:2,rowLabel:'shipment',trimFields:false});
+  assert.deepEqual(records[0].cells, [...header.split(','), 'pro_number', 'tracking_url']);
+  assert.equal(records[1].cells[3],'Sender, "A"');
+  assert.equal(records[1].cells[6],'06103');
+  assert.equal(records[1].cells[10],"'=2+2");
+  const tab = watch(await publicContext.newPage());
+  for (const [{ cells }, receipt] of records.slice(1).map((record, index) => [record, replay.shipments[index]])) {
+    const [pro, url] = cells.slice(-2);
+    assert.match(pro,/^[0-9]{9}$/);
+    assert.equal(pro, receipt.pro);
+    assert.equal(url, origin + '/ltl/apps/Tracking#pro=' + pro);
+    const lookup = tab.waitForResponse(result => result.url().endsWith('/api/tracking/search'));
+    await tab.goto(url);
+    assert.equal((await (await lookup).json()).results[0].shipments[0].pro, pro);
+    await tab.getByRole('status').filter({hasText:'1 shipment record found.'}).waitFor();
+  }
+  await tab.close();
+  await snapshot(page,'admin-bulk-shipment-export');
+  pass('Download bulk shipment CSV and open each public link', 'Original row order and fields retained with nine-digit PROs and direct tracking links');
+}
+
 try {
   if (mode === '--verify-existing') {
     const original = JSON.parse(await readFile(reportPath, 'utf8'));
@@ -377,6 +444,7 @@ try {
     }
     pass('Six responsive viewports', viewportSizes.map(([w,h])=>`${w}×${h}`).join(', ') + '; no document overflow');
     await verifyAdminWorkflows(page, publicPage, fixture);
+    await verifyBulkImport(page, publicContext, fixture);
     assert.deepEqual(consoleErrors, [], 'No uncaught page errors');
     pass('No uncaught browser errors', 'Public tracking and admin');
     report.finished = new Date().toISOString();

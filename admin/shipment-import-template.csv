@@ -1,0 +1,2 @@
+service,pieces,weight,weight_unit,reference,ship_from_company,ship_from_city,ship_from_state,ship_from_postal_code,ship_from_country,ship_to_company,ship_to_city,ship_to_state,ship_to_postal_code,ship_to_country
+LTL,2,180,lb,ORDER-001,Example Sender,Hartford,CT,06103,US,Example Recipient,Boston,MA,02108,US

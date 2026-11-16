@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 
 export const shipmentStatuses = Object.freeze([
@@ -12,6 +12,7 @@ const numericProPattern = /^[0-9]{9}$/;
 const legacyProPattern = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
 const referenceColumns = Object.freeze({ bol: 'bol', po: 'po', reference: 'reference' });
 const poPrefix = 'CA01226';
+const maxBulkShipments = 100;
 const maxDocumentBytes = 2 * 1024 * 1024;
 const timelineOrder = 'occurred_at DESC, created_at DESC, id DESC';
 
@@ -142,6 +143,16 @@ function manualPro(value) {
   if (!input) return null;
   if (!numericProPattern.test(input)) fail(400, 'A new PRO number must contain exactly 9 digits.');
   return input;
+}
+
+function prepareShipmentCreation(body, bulk = false) {
+  const draft = shipmentDraft(body);
+  if (bulk && text(body.pro, 'PRO number', 36)) fail(400, 'Bulk imports generate PRO numbers automatically. Leave the PRO number blank.');
+  const requested = manualPro(body.pro);
+  if (body.status != null && body.status !== 'created') {
+    fail(400, 'Record a confirmed tracking event to change a shipment status.');
+  }
+  return { draft, requested };
 }
 
 export function isTrackingPro(value) {
@@ -359,24 +370,28 @@ async function availableReference(client, kind, candidates) {
   return rows[0]?.candidate;
 }
 
-async function automaticBol(client) {
-  const candidates = Array.from({ length: 16 }, () => String(randomInt(10_000_000_000, 100_000_000_000)));
+async function automaticBol(client, reserved) {
+  const candidates = Array.from({ length: 16 }, () => String(randomInt(10_000_000_000, 100_000_000_000)))
+    .filter(candidate => !reserved?.has(candidate));
   const number = await availableReference(client, 'bol', candidates);
   if (!number) fail(409, 'Could not allocate a bill of lading number. Try again or enter one manually.');
   return number;
 }
 
-async function automaticPo(client) {
-  const candidates = Array.from({ length: 16 }, () => `${poPrefix}${String(randomInt(100_000)).padStart(5, '0')}A`);
+async function automaticPo(client, reserved) {
+  const candidates = Array.from({ length: 16 }, () => `${poPrefix}${String(randomInt(100_000)).padStart(5, '0')}A`)
+    .filter(candidate => !reserved?.has(candidate));
   const proposed = await availableReference(client, 'po', candidates);
   if (proposed) return proposed;
 
   // The five-digit namespace is finite. Search it before reporting exhaustion.
-  const { rows } = await client.query(`SELECT $1 || lpad(choices.number::text, 5, '0') || 'A' AS candidate
-    FROM generate_series(0, 99999) AS choices(number)
-    WHERE NOT EXISTS (SELECT 1 FROM shipments WHERE po <> ''
-      AND upper(po) = $1 || lpad(choices.number::text, 5, '0') || 'A')
-    LIMIT 1`, [poPrefix]);
+  const { rows } = await client.query(`SELECT candidate FROM (
+      SELECT $1 || lpad(number::text, 5, '0') || 'A' AS candidate
+      FROM generate_series(0, 99999) AS choices(number)
+    ) AS supported
+    WHERE candidate <> ALL($2::text[])
+      AND NOT EXISTS (SELECT 1 FROM shipments WHERE po <> '' AND upper(po) = supported.candidate)
+    LIMIT 1`, [poPrefix, reserved ? [...reserved] : []]);
   if (!rows.length) fail(409, 'All automatic purchase order numbers are in use. Enter a PO number manually.');
   return rows[0].candidate;
 }
@@ -393,6 +408,30 @@ async function writeParty(client, shipmentId, kind, party) {
 function shipmentValues(draft) {
   return [draft.service, draft.bol, draft.po, draft.reference, draft.pickupDate, draft.estimatedDeliveryDate,
     draft.pieces, draft.weight, draft.weightUnit, draft.trailer, draft.instructions, draft.shareNames, draft.shareDetails];
+}
+
+// The caller holds the transaction-level reference lock while allocating and inserting.
+async function insertShipment(client, { draft: prepared, requested }, actorId, audit, reserved) {
+  const draft = { ...prepared };
+  if (!draft.bol) draft.bol = await automaticBol(client, reserved?.bol);
+  if (!draft.po) draft.po = await automaticPo(client, reserved?.po);
+  const { rows: [row] } = await client.query(`INSERT INTO shipments
+    (service, bol, po, reference, pickup_date, estimated_delivery_date, pieces, weight, weight_unit,
+      trailer, instructions, share_names, share_details, created_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`, [...shipmentValues(draft), actorId]);
+  const pro = await issuePro(client, row.id, requested);
+  await writeParty(client, row.id, 'ship_from', draft.shipFrom);
+  await writeParty(client, row.id, 'ship_to', draft.shipTo);
+  await audit(client, { actorId, action: 'shipment.created', targetType: 'shipment', targetId: row.id,
+    metadata: { pro, issuance: requested ? 'manual' : 'automatic' } });
+  return { id: row.id, pro, bol: draft.bol, po: draft.po };
+}
+
+function reserveBatchReferences(rows) {
+  return {
+    bol: new Set(rows.map(row => row.draft.bol.toUpperCase()).filter(Boolean)),
+    po: new Set(rows.map(row => row.draft.po.toUpperCase()).filter(Boolean)),
+  };
 }
 
 async function bumpShipment(client, shipmentId, status = null) {
@@ -510,27 +549,74 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
   });
 
   router.post('/shipments', editShipment, async (req, res) => {
-    const draft = shipmentDraft(req.body);
-    const requested = manualPro(req.body.pro);
-    if (req.body.status != null && req.body.status !== 'created') {
-      fail(400, 'Record a confirmed tracking event to change a shipment status.');
-    }
+    const prepared = prepareShipmentCreation(req.body);
     const shipment = await transaction(pool, async client => {
       await lockShipmentReferences(client);
-      if (!draft.bol) draft.bol = await automaticBol(client);
-      if (!draft.po) draft.po = await automaticPo(client);
-      const { rows: [row] } = await client.query(`INSERT INTO shipments
-        (service, bol, po, reference, pickup_date, estimated_delivery_date, pieces, weight, weight_unit,
-          trailer, instructions, share_names, share_details, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`, [...shipmentValues(draft), req.user.id]);
-      const pro = await issuePro(client, row.id, requested);
-      await writeParty(client, row.id, 'ship_from', draft.shipFrom);
-      await writeParty(client, row.id, 'ship_to', draft.shipTo);
-      await audit(client, { actorId: req.user.id, action: 'shipment.created', targetType: 'shipment', targetId: row.id,
-        metadata: { pro, issuance: requested ? 'manual' : 'automatic' } });
-      return getShipment(client, row.id);
+      const created = await insertShipment(client, prepared, req.user.id, audit);
+      return getShipment(client, created.id);
     });
     res.status(201).json({ shipment });
+  });
+
+  router.post('/shipments/bulk', editShipment, async (req, res) => {
+    const importId = req.body?.importId;
+    const rows = req.body?.shipments;
+    if (typeof importId !== 'string' || !uuidPattern.test(importId)) {
+      return res.status(400).json({ error: 'Provide a valid shipment import ID.' });
+    }
+    if (!Array.isArray(rows) || !rows.length || rows.length > maxBulkShipments) {
+      return res.status(400).json({ error: `Include between 1 and ${maxBulkShipments} shipments.` });
+    }
+
+    const prepared = [];
+    const errors = [];
+    for (const [index, body] of rows.entries()) {
+      try {
+        prepared.push(prepareShipmentCreation(body, true));
+      } catch (error) {
+        if (!error.expose || error.status !== 400) throw error;
+        errors.push({ row: index + 1, message: error.message });
+      }
+    }
+    if (errors.length) return res.status(400).json({ error: 'Correct the invalid shipment rows before importing.', errors });
+
+    const actorId = req.user.id;
+    const canonicalId = importId.toLowerCase();
+    const hash = createHash('sha256').update(JSON.stringify(prepared)).digest('hex');
+    const reserved = reserveBatchReferences(prepared);
+    try {
+      const result = await transaction(pool, async client => {
+        // This lock also serializes retries against the original import, including across app instances.
+        await lockShipmentReferences(client);
+        const { rows: [previous] } = await client.query(`SELECT request_hash, receipts FROM shipment_imports
+          WHERE actor_id=$1 AND import_id=$2`, [actorId, canonicalId]);
+        if (previous) {
+          if (previous.request_hash !== hash) fail(409, 'This import ID was already used for different shipment rows.');
+          return { replayed: true, shipments: previous.receipts };
+        }
+
+        const shipments = [];
+        for (const [index, record] of prepared.entries()) {
+          try {
+            const shipment = await insertShipment(client, record, actorId, audit, reserved);
+            shipments.push({ row: index + 1, ...shipment });
+          } catch (error) {
+            if (error.expose) error.importRow = index + 1;
+            throw error;
+          }
+        }
+        await client.query(`INSERT INTO shipment_imports (actor_id, import_id, request_hash, receipts)
+          VALUES ($1, $2, $3, $4::jsonb)`, [actorId, canonicalId, hash, JSON.stringify(shipments)]);
+        await audit(client, { actorId, action: 'shipments.imported', targetType: 'shipment_import', targetId: canonicalId,
+          metadata: { total: shipments.length } });
+        return { replayed: false, shipments };
+      });
+      res.status(result.replayed ? 200 : 201).json({ importId: canonicalId, total: result.shipments.length, ...result });
+    } catch (error) {
+      if (!error.expose || !error.importRow) throw error;
+      res.status(error.status).json({ error: 'The shipment import could not be saved.',
+        errors: [{ row: error.importRow, message: error.message }] });
+    }
   });
 
   router.get('/shipments/:id', async (req, res) => {

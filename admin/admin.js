@@ -4,6 +4,7 @@ import {
 import {
   canEditShipment, renderAudit, renderCustomers, renderNewShipment, renderShipment, renderShipmentList,
 } from './shipments.js';
+import { renderShipmentImport } from './shipment-import.js';
 
 const root = document.querySelector('#admin-app');
 const state = {
@@ -259,7 +260,7 @@ async function renderRoute() {
   const activeId = ++state.renderId;
   const active = () => state.renderId === activeId && Boolean(state.user);
   const context = { user: state.user, config: state.config, active, go, refresh: renderRoute, notice: message => { state.notice = message; } };
-  const current = ['shipment', 'new'].includes(view) ? 'shipments' : view;
+  const current = view === 'bulk' ? 'numbers' : ['shipment', 'new'].includes(view) ? 'shipments' : view;
   root.querySelectorAll('[data-nav]').forEach(link => {
     if (link.dataset.nav === current) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -272,6 +273,8 @@ async function renderRoute() {
   try {
     if (view === 'new' && canEditShipment(state.user)) {
       renderNewShipment(container, context);
+    } else if (view === 'bulk' && canEditShipment(state.user)) {
+      renderShipmentImport(container, context);
     } else if (view === 'shipment' && /^[0-9a-f-]{36}$/i.test(shipment)) {
       await renderShipment(container, context, shipment, tab, action);
     } else if (['overview', 'shipments', 'numbers', 'events', 'documents'].includes(view) && (view !== 'documents' || state.user.role === 'admin')) {
