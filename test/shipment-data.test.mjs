@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import crypto, { randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import test from 'node:test';
 
 import express from 'express';
@@ -261,4 +262,64 @@ test('PostgreSQL shipment routes enforce permanent PROs, atomic updates, confirm
   assert.ok(auditTrail.some(entry => entry.action === 'event.deleted' && entry.targetId === delivered.body.event.id));
   assert.ok(auditTrail.some(entry => entry.action === 'document.created' && entry.targetId === upload.body.document.id));
   assert.equal(auditTrail.filter(entry => entry.action === 'shipment.created').length, 2);
+
+  await t.test('create fills missing references without colliding or changing manual reuse', async subtest => {
+    const legacyShipment = await request(`${shipments}/${legacy.id}`, { role: 'viewer' });
+    assert.equal(legacyShipment.body.shipment.bol, '');
+    assert.equal(legacyShipment.body.shipment.po, '');
+
+    const occupied = await change(shipments, { ...draft, pro: '710002001', bol: '12345678901', po: 'ca0122600000a' });
+    assert.equal(occupied.status, 201, occupied.body.error);
+    assert.equal(occupied.body.shipment.bol, '12345678901');
+    assert.equal(occupied.body.shipment.po, 'ca0122600000a');
+
+    // Exercise a padded PO, then force concurrent requests to hit an occupied PO and share BOL candidates.
+    const fallbackBol = [12_345_678_901, 12_345_678_902, 12_345_678_903];
+    let draw = 0;
+    let poCandidate = 42;
+    const randomInt = crypto.randomInt;
+    subtest.mock.method(crypto, 'randomInt', (min, max) => {
+      if (max === 100_000_000_000) return fallbackBol[draw++ % fallbackBol.length];
+      if (min === 100_000 && max === undefined) return poCandidate;
+      return randomInt(min, max);
+    });
+    syncBuiltinESMExports();
+    subtest.after(() => {
+      subtest.mock.restoreAll();
+      syncBuiltinESMExports();
+    });
+
+    const partial = await change(shipments, { ...draft, pro: '710002004', bol: '12345678901', po: '' });
+    assert.equal(partial.status, 201, partial.body.error);
+    assert.equal(partial.body.shipment.bol, '12345678901');
+    assert.equal(partial.body.shipment.po, 'CA0122600042A');
+    poCandidate = 0;
+    const concurrent = await Promise.all([
+      change(shipments, { ...draft, pro: '710002002', bol: undefined, po: undefined }),
+      change(shipments, { ...draft, pro: '710002003', bol: '   ', po: '' }),
+    ]);
+    for (const response of concurrent) assert.equal(response.status, 201, response.body.error);
+    const [first, second] = concurrent.map(response => response.body.shipment);
+    assert.deepEqual([first.bol, second.bol].sort(), ['12345678902', '12345678903']);
+    assert.notEqual(first.po, second.po);
+    for (const po of [first.po, second.po]) {
+      assert.match(po, /^CA01226[0-9]{5}A$/);
+      assert.notEqual(po, 'CA0122600000A');
+      assert.notEqual(po, partial.body.shipment.po);
+    }
+
+    const reuse = await change(shipments, { ...draft, pro: '710002005', bol: first.bol, po: first.po });
+    assert.equal(reuse.status, 201, reuse.body.error);
+    assert.equal(reuse.body.shipment.po, first.po);
+
+    const verifiedAuto = await search({ ...ref, kind: 'po', number: second.po });
+    assert.equal(verifiedAuto.status, 200, verifiedAuto.body.error);
+    assert.equal(verifiedAuto.body.results[0].shipments[0].pro, second.pro);
+    const retained = await request(`${shipments}/${second.id}`, { role: 'viewer' });
+    assert.equal(retained.body.shipment.bol, second.bol);
+    const edited = await change(`${shipments}/${first.id}`, { version: first.version, bol: '' }, 'PATCH');
+    assert.equal(edited.status, 200, edited.body.error);
+    assert.equal(edited.body.shipment.bol, '');
+    assert.equal(edited.body.shipment.po, first.po);
+  });
 });

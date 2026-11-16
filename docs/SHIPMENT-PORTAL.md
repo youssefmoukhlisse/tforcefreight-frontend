@@ -1,6 +1,6 @@
 # Independent shipment portal
 
-The staged application uses Node 24, Express, vanilla HTML/CSS/JavaScript and PostgreSQL. It shares the repository and Railway project with the existing informational frontend; the staged database is isolated from production. New shipment numbers are nine-digit internal IDs. Previously issued `INT-` numbers still work for tracking. App status and timeline come from database records and never use reference screenshot data.
+The staged application uses Node 24, Express, vanilla HTML/CSS/JavaScript and PostgreSQL. It shares the repository and Railway project with the existing informational frontend; the staged database is isolated from production. New PRO numbers are nine-digit internal IDs. Previously issued `INT-` numbers still work for tracking. App status and timeline come from database records and never use reference screenshot data.
 
 ## Staging and first sign-in
 
@@ -10,6 +10,8 @@ The staged application uses Node 24, Express, vanilla HTML/CSS/JavaScript and Po
 4. Use authorized test records and example addresses only in staging. Confirm `GET /healthz` says `tracking: ready`.
 
 The `admin` role manages users, sensitive event corrections/removals, shipment documents, and audit history. `operator` manages shipments, adds events, and revokes subscriptions. `viewer` can read shipments and the timeline. There are no preset accounts or default passwords. Password recovery for enrolled admins uses an offline recovery code; an admin can generate a short-lived reset or first-enrollment token for another account.
+
+Leave the bill of lading or PO number blank when creating a shipment to issue that number automatically. Bills of lading use 11 digits and PO numbers use `CA01226` followed by five digits and `A`. Existing shipment references can still be entered manually.
 
 ## Database and privacy
 

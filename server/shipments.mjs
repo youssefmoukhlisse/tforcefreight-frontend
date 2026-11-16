@@ -11,6 +11,7 @@ const uuidPattern = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i
 const numericProPattern = /^[0-9]{9}$/;
 const legacyProPattern = /^INT-[A-Z0-9][A-Z0-9-]{3,31}$/;
 const referenceColumns = Object.freeze({ bol: 'bol', po: 'po', reference: 'reference' });
+const poPrefix = 'CA01226';
 const maxDocumentBytes = 2 * 1024 * 1024;
 const timelineOrder = 'occurred_at DESC, created_at DESC, id DESC';
 
@@ -327,6 +328,41 @@ async function issuePro(client, shipmentId, requested) {
   fail(503, 'A unique PRO number could not be issued. Try again.');
 }
 
+async function lockShipmentReferences(client) {
+  // Manual reference reuse remains allowed. Serialize all app reference writes with automatic allocation.
+  await client.query('SELECT pg_advisory_xact_lock(725464302)');
+}
+
+async function availableReference(client, kind, candidates) {
+  const column = referenceColumns[kind];
+  const { rows } = await client.query(`SELECT candidate FROM unnest($1::text[]) AS choices(candidate)
+    WHERE NOT EXISTS (SELECT 1 FROM shipments WHERE ${column} <> '' AND upper(${column}) = choices.candidate)
+    LIMIT 1`, [candidates]);
+  return rows[0]?.candidate;
+}
+
+async function automaticBol(client) {
+  const candidates = Array.from({ length: 16 }, () => String(randomInt(10_000_000_000, 100_000_000_000)));
+  const number = await availableReference(client, 'bol', candidates);
+  if (!number) fail(409, 'Could not allocate a bill of lading number. Try again or enter one manually.');
+  return number;
+}
+
+async function automaticPo(client) {
+  const candidates = Array.from({ length: 16 }, () => `${poPrefix}${String(randomInt(100_000)).padStart(5, '0')}A`);
+  const proposed = await availableReference(client, 'po', candidates);
+  if (proposed) return proposed;
+
+  // The five-digit namespace is finite. Search it before reporting exhaustion.
+  const { rows } = await client.query(`SELECT $1 || lpad(choices.number::text, 5, '0') || 'A' AS candidate
+    FROM generate_series(0, 99999) AS choices(number)
+    WHERE NOT EXISTS (SELECT 1 FROM shipments WHERE po <> ''
+      AND upper(po) = $1 || lpad(choices.number::text, 5, '0') || 'A')
+    LIMIT 1`, [poPrefix]);
+  if (!rows.length) fail(409, 'All automatic purchase order numbers are in use. Enter a PO number manually.');
+  return rows[0].candidate;
+}
+
 async function writeParty(client, shipmentId, kind, party) {
   await client.query(`INSERT INTO shipment_parties (shipment_id, kind, company, contact, address, city, state,
       postal_code, country, phone, email) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
@@ -462,6 +498,9 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
       fail(400, 'Record a confirmed tracking event to change a shipment status.');
     }
     const shipment = await transaction(pool, async client => {
+      await lockShipmentReferences(client);
+      if (!draft.bol) draft.bol = await automaticBol(client);
+      if (!draft.po) draft.po = await automaticPo(client);
       const { rows: [row] } = await client.query(`INSERT INTO shipments
         (service, bol, po, reference, pickup_date, estimated_delivery_date, pieces, weight, weight_unit,
           trailer, instructions, share_names, share_details, created_by)
@@ -496,6 +535,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
         shipFrom: body.shipFrom === undefined ? previous.shipFrom : { ...previous.shipFrom, ...object(body.shipFrom, 'Ship from') },
         shipTo: body.shipTo === undefined ? previous.shipTo : { ...previous.shipTo, ...object(body.shipTo, 'Ship to') },
       });
+      if (draft.bol !== previous.bol || draft.po !== previous.po) await lockShipmentReferences(client);
       await client.query(`UPDATE shipments SET service=$1, bol=$2, po=$3, reference=$4, pickup_date=$5,
         estimated_delivery_date=$6, pieces=$7, weight=$8, weight_unit=$9, trailer=$10, instructions=$11,
         share_names=$12, share_details=$13, version=version+1, updated_at=clock_timestamp() WHERE id=$14`,

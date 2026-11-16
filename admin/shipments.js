@@ -220,8 +220,12 @@ function shipmentForm(shipment) {
         hint: 'Enter 9 digits or leave blank to generate a number automatically.',
       })}
       ${serviceTypeField(item.service)}
-      ${field('bol', 'Bill of lading number', item.bol, { maxlength: 100 })}
-      ${field('po', 'PO number', item.po, { maxlength: 100 })}
+      ${field('bol', 'Bill of lading number', item.bol, {
+        maxlength: 100, hint: shipment ? '' : 'Leave blank to generate an 11-digit number on save.',
+      })}
+      ${field('po', 'PO number', item.po, {
+        maxlength: 100, hint: shipment ? '' : 'Leave blank to generate a number like CA0122612345A on save.',
+      })}
       ${field('reference', 'Reference number', item.reference, { maxlength: 100 })}
       ${field('trailer', 'Trailer number', item.trailer, { maxlength: 48 })}
       ${field('pickupDate', 'Pickup date', item.pickupDate?.slice(0, 10), { type: 'date' })}

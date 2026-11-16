@@ -161,7 +161,7 @@ try {
     await page.locator('#shipment-form').waitFor();
     const fixture = 'QA-' + Date.now().toString(36).toUpperCase();
     const fields = {
-      bol:fixture + '-BOL', po:fixture + '-PO', reference:fixture + '-REF', pieces:1, weight:2725,
+      reference:fixture + '-REF', pieces:1, weight:2725,
       pickupDate:'2026-08-18', estimatedDeliveryDate:'2026-08-21',
       'shipFrom-company':'SYNTHETIC ORIGIN LLC', 'shipFrom-contact':'QA Sender', 'shipFrom-address':'TEST PRIVATE STREET',
       'shipFrom-city':'Atlanta', 'shipFrom-state':'GA', 'shipFrom-postalCode':'30303', 'shipFrom-email':'qa-sender@example.test',
@@ -179,9 +179,13 @@ try {
     const { shipment } = await created.json();
     const pro = report.pro = shipment.pro;
     assert.match(pro, /^[1-9][0-9]{8}$/);
+    assert.match(shipment.bol, /^[0-9]{11}$/);
+    assert.match(shipment.po, /^CA01226[0-9]{5}A$/);
     assert.equal(shipment.service, 'LTL');
     await page.waitForURL('**/#shipment/*/summary');
-    pass('Create shipment and issue internal PRO', pro);
+    await page.getByText(shipment.bol, { exact: true }).waitFor();
+    await page.getByText(shipment.po, { exact: true }).waitFor();
+    pass('Create shipment and issue internal PRO, BOL and PO', 'All three generated numbers appear on the shipment summary');
     const duplicate = await json(adminContext, '/api/admin/shipments', { ...shipment, pro, shipFrom:shipment.shipFrom, shipTo:shipment.shipTo });
     assert.equal(duplicate.status(), 409, 'A duplicate PRO request must be rejected');
     pass('Duplicate PRO rejected', 'HTTP 409');
@@ -239,23 +243,25 @@ try {
     report.eventCount = events.length;
     pass('New delivery event appears publicly in order', 'Latest first with America/New_York local time; signature withheld from PRO-only search');
 
-    const ref = {mode:'reference',kind:'bol',number:fields.bol, fromDate:'2026-08-18',toDate:'2026-08-20',originZip:'30303',destinationZip:'21044'};
+    const ref = {mode:'reference',kind:'bol',number:shipment.bol, fromDate:'2026-08-18',toDate:'2026-08-20',originZip:'30303',destinationZip:'21044'};
     const rejected = await json(publicContext,'/api/tracking/search',{...ref,destinationZip:'11111'});
     assert.equal((await rejected.json()).results[0].shipments.length,0);
     await publicPage.locator('label[for="mode-reference"]').click();
     await publicPage.locator('#reference-kind').selectOption('bol');
-    await fill(publicPage, {'reference-number':fields.bol,'from-date':ref.fromDate,'to-date':ref.toDate,'origin-zip':ref.originZip,'destination-zip':ref.destinationZip});
+    await fill(publicPage, {'reference-number':ref.number,'from-date':ref.fromDate,'to-date':ref.toDate,'origin-zip':ref.originZip,'destination-zip':ref.destinationZip});
     const reference = publicPage.waitForResponse(response => response.url().endsWith('/api/tracking/search'));
     await publicPage.getByRole('button',{name:'Track',exact:true}).click();
     const referenceData = await (await reference).json();
     assert.equal(referenceData.results[0].shipments[0].pro,pro);
     assert.equal(referenceData.results[0].shipments[0].delivery.signedBy,'QA Receiver');
+    const poLookup = await json(publicContext, '/api/tracking/search', { ...ref, kind: 'po', number: shipment.po });
+    assert.equal((await poLookup.json()).results[0].shipments[0].pro, pro);
     await publicPage.getByRole('button',{name:'Reset',exact:true}).click();
     await publicPage.getByRole('radio',{name:'PRO',exact:true}).waitFor({state:'attached'});
     assert.equal(await publicPage.getByRole('radio',{name:'PRO',exact:true}).isChecked(),true);
     await publicPage.locator('#track-numbers').waitFor({state:'visible'});
     assert.equal(await publicPage.locator('.result-group').count(),0);
-    pass('BOL reference, ZIP verification and reset', 'Wrong ZIP found nothing; verified search returned permitted delivery details');
+    pass('Generated BOL and PO reference lookup, ZIP verification and reset', 'Wrong ZIP found nothing; verified search returned permitted delivery details');
 
     const attack = await publicContext.request.post(origin + '/api/tracking/search', {
       headers:{Origin:'https://invalid.example.test','Content-Type':'application/json'},data:{mode:'pro',numbers:[pro]},
