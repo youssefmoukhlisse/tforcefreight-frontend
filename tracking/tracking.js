@@ -37,9 +37,8 @@ const time = (value) => {
   const match = /^(\d{2}):(\d{2})/.exec(value || '');
   if (!match) return '—';
   const hour = Number(match[1]);
-  return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${String(hour % 12 || 12).padStart(2, '0')}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`;
 };
-const zone = (value) => value ? `<span class="timezone">${escapeHtml(value)}</span>` : '';
 const locationText = (location) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
 const eventActivities = {
   picked_up: 'Shipment has been picked up.',
@@ -48,10 +47,12 @@ const eventActivities = {
   delivered: 'Shipment has been delivered to the consignee.',
 };
 function eventLocalTime(event) {
+  const [clock, meridiem] = time(event.eventTime).split(' ');
+  const localTime = `<span class="event-clock">${clock}</span>${meridiem ? ` ${meridiem}` : ''}`;
   const timezone = escapeHtml(event.timeZone);
   return timezone
-    ? `<span title="${timezone}">${time(event.eventTime)}<span class="sr-only"> ${timezone}</span></span>`
-    : time(event.eventTime);
+    ? `<span title="${timezone}">${localTime}<span class="sr-only"> ${timezone}</span></span>`
+    : localTime;
 }
 
 async function api(path, options = {}) {
@@ -99,10 +100,16 @@ function renderShipment(shipment, id) {
     <summary><span>${visible(shipment.pro)}</span><span class="headline-status ${statusClass}">${label}</span></summary>
     <div class="shipment-body">
       <section class="summary-panel" aria-labelledby="status-${id}">
-        <div class="status-line"><h3 id="status-${id}">${label}</h3><p>${description}</p></div>
-        <div class="progress-rail"><progress class="progress-bar" max="100" value="${step}" aria-label="Shipment progress"></progress>${isDelivered ? '<span class="progress-check" aria-hidden="true">✓</span>' : ''}</div>
+        <div class="status-line">
+          <div class="status-title"><h3 id="status-${id}">${label}</h3><details class="status-help">
+            <summary aria-label="About ${label}">?</summary>
+            <p>${description}</p>
+          </details></div>
+          <p>${description}</p>
+        </div>
+        <div class="progress-rail"><progress class="progress-bar" max="100" value="${step}" aria-label="Shipment progress"></progress>${isDelivered ? '<span class="progress-check" aria-hidden="true"></span>' : ''}</div>
         <dl class="summary-data">
-          ${isDelivered ? pair('Delivered On', date(delivery.eventDate)) + pair('Delivered At', time(delivery.eventTime) + zone(delivery.timeZone)) + pair('Signed By', visible(delivery.signedBy)) : pair('Pickup Date', date(shipment.pickupDate)) + pair('Expected Delivery', date(shipment.estimatedDeliveryDate)) + pair('Current Status', label)}
+          ${isDelivered ? pair('Delivered On', date(delivery.eventDate)) + pair('Delivered At', eventLocalTime(delivery)) + pair('Signed By', visible(delivery.signedBy)) : pair('Pickup Date', date(shipment.pickupDate)) + pair('Expected Delivery', date(shipment.estimatedDeliveryDate)) + pair('Current Status', label)}
           ${pair('Service', visible(shipment.service))}
         </dl>
         <div class="summary-actions">
@@ -112,9 +119,9 @@ function renderShipment(shipment, id) {
       </section>
       <aside class="parties" aria-label="Shipment parties">${shipParty('Ship To', shipment.shipTo)}${shipParty('Ship From', shipment.shipFrom)}</aside>
       <div class="shipment-details" id="details-${id}" hidden>
-        <section class="progress-panel" aria-labelledby="progress-${id}"><h3 class="panel-title" id="progress-${id}">Shipment Progress</h3>
+        <section class="progress-panel" aria-labelledby="progress-${id}"><h3 class="panel-title" id="progress-${id}" tabindex="-1">Shipment Progress</h3>
           ${historyTable(shipment.events)}
-          <div class="hide-row"><button class="text-link" type="button" data-hide-details="${id}">Hide Details −</button></div>
+          <div class="hide-row"><button class="text-link" type="button" data-hide-details="${id}" aria-controls="details-${id}">Hide Details −</button></div>
         </section>
         <section class="details-panel" aria-labelledby="fields-${id}"><h3 class="panel-title" id="fields-${id}">Shipment Details</h3><dl>
           ${pair('Bill of Lading', bol)}${pair('PO Number', visible(shipment.po))}
@@ -130,6 +137,11 @@ function renderGroups(groups) {
   results.innerHTML = groups.map(({query, shipments = []}, groupIndex) => shipments.length
     ? `<details class="result-group" open><summary>PRO(S) RELATED TO ${escapeHtml(query)}</summary><div class="result-list">${shipments.map((ship, index) => renderShipment(ship, `${groupIndex}-${index}`)).join('')}</div></details>`
     : `<p class="result-message">No shipment records found for <strong>${escapeHtml(query)}</strong>. Check the number and search details.</p>`).join('');
+  if (groups.some(group => group.shipments?.length)) {
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    results.insertAdjacentHTML('beforeend', `<p class="results-timestamp">Tracking results displayed <time datetime="${now.toISOString()}">${escapeHtml(timestamp)}</time></p>`);
+  }
 }
 
 function showError(message) {
@@ -225,8 +237,9 @@ results.addEventListener('click', event => {
     const show = results.querySelector(`[data-details-toggle="${id}"]`);
     details.hidden = !open;
     show.setAttribute('aria-expanded', String(open));
-    show.textContent = open ? 'Hide Details −' : 'Show Details +';
-    if (!open) show.focus();
+    show.hidden = open;
+    if (open) get('progress-' + id).focus({ preventScroll: true });
+    else show.focus();
   }
   if ('updates' in button.dataset) {
     subscribePro = button.dataset.updates;
