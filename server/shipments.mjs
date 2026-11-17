@@ -514,6 +514,33 @@ async function currentEvent(client, shipmentId) {
   return rows[0] || null;
 }
 
+async function progressReceiptsWithCurrentTracking(client, receipts) {
+  const { rows } = await client.query(`SELECT s.id, s.status, t.pro_number,
+      to_char(latest.event_date, 'YYYY-MM-DD') AS event_day,
+      substring(latest.event_time::text, 1, 5) AS event_hour, latest.time_zone, latest.utc_offset
+    FROM shipments s
+    JOIN tracking_numbers t ON t.shipment_id=s.id AND t.is_current
+    LEFT JOIN LATERAL (
+      SELECT status, event_date, event_time, time_zone, utc_offset FROM tracking_events
+      WHERE shipment_id=s.id AND kind='confirmed' AND deleted_at IS NULL
+      ORDER BY ${timelineOrder} LIMIT 1
+    ) latest ON latest.status=s.status
+    WHERE s.id=ANY($1::uuid[])`, [receipts.map(receipt => receipt.shipmentId)]);
+  const currentById = new Map(rows.map(row => [row.id, row]));
+  return receipts.map(receipt => {
+    const current = currentById.get(receipt.shipmentId);
+    return {
+      ...receipt,
+      canonicalPro: current?.pro_number ?? null,
+      currentStatus: current?.status ?? null,
+      currentEventDate: current?.event_day ?? null,
+      currentEventTime: current?.event_hour ?? null,
+      currentTimeZone: current?.time_zone ?? null,
+      currentUtcOffset: current?.utc_offset ?? null,
+    };
+  });
+}
+
 async function insertTrackingEvent(client, shipment, draft, { actorId, audit, onConfirmedEvent }) {
   const { rows: [row] } = await client.query(`INSERT INTO tracking_events (status, kind, location, city, state,
     country, occurred_at, event_date, event_time, time_zone, utc_offset, source, trailer, notes,
@@ -735,7 +762,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
         WHERE actor_id=$1 AND import_id=$2`, [actorId, canonicalId]);
       if (previous) {
         if (previous.request_hash !== hash) fail(409, 'This import ID was already used for different progress rows.');
-        return { replayed: true, events: previous.receipts };
+        return { replayed: true, events: await progressReceiptsWithCurrentTracking(client, previous.receipts) };
       }
 
       const matched = await resolveBulkEventTargets(client, prepared);
@@ -756,7 +783,7 @@ function mountAdmin(router, { pool, requireAuth, requireRole, audit, onConfirmed
         VALUES ($1, $2, $3, $4::jsonb)`, [actorId, canonicalId, hash, JSON.stringify(events)]);
       await audit(client, { actorId, action: 'events.imported', targetType: 'shipment_event_import', targetId: canonicalId,
         metadata: { total: events.length } });
-      return { replayed: false, events };
+      return { replayed: false, events: await progressReceiptsWithCurrentTracking(client, events) };
     });
     if (result.errors) return res.status(400).json({ error: 'Correct the invalid progress rows before importing.', errors: result.errors });
     res.status(result.replayed ? 200 : 201).json({ importId: canonicalId, total: result.events.length, ...result });

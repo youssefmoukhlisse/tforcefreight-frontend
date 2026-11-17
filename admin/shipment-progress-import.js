@@ -3,8 +3,8 @@ import {
   section, statuses, table, textarea,
 } from './ui.js';
 import { maxShipmentCsvBytes, maxShipmentRows } from './shipment-csv.js';
-import { parseShipmentProgressCsv, prepareShipmentProgress } from './shipment-progress-csv.js';
-import { csvImportRetryId, decodeCsvFile } from './import-utils.js';
+import { exportShipmentProgressCsv, parseShipmentProgressCsv, prepareShipmentProgress } from './shipment-progress-csv.js';
+import { csvImportRetryId, decodeCsvFile, downloadCsv } from './import-utils.js';
 
 const progressStatuses = Object.entries(statuses).filter(([status]) => status !== 'created');
 const payloadFields = [
@@ -110,22 +110,53 @@ function previewMarkup(rows) {
   });
 }
 
-function showResults(output, rows, result) {
+function showResults(output, rows, result, originalFilename) {
   const count = result.events.length;
   const noun = count === 1 ? 'tracking event' : 'tracking events';
   const message = result.replayed
     ? `Recovered the results for ${count} previously recorded ${noun}.`
     : `Recorded ${count} ${noun}.`;
-  const results = result.events.map(({ pro, status, shipmentId }, index) => [
-    html(rows[index].line),
-    `<a href="#shipment/${encodeURIComponent(shipmentId)}/events"><span class="chip">${html(pro)}</span></a>`,
-    badge(status),
-  ]);
+  const results = result.events.map((receipt, index) => {
+    const { canonicalPro, status, shipmentId, currentStatus, currentEventDate, currentEventTime, currentTimeZone, currentUtcOffset } = receipt;
+    const localTime = [currentEventTime, currentTimeZone, currentUtcOffset].filter(Boolean).join(' ');
+    return [
+      html(rows[index].line),
+      `<a href="#shipment/${encodeURIComponent(shipmentId)}/events"><span class="chip">${html(canonicalPro)}</span></a>`,
+      badge(status),
+      badge(currentStatus),
+      html(day(currentEventDate)) + (localTime ? `<small>${html(localTime)}</small>` : ''),
+    ];
+  });
   output.innerHTML = section('Progress Updated', `
     <p class="feedback success" role="status">${message}</p>
-    ${table(['CSV line', 'PRO number', 'Event recorded'], results)}
-    <div class="form-actions"><a class="button secondary" href="#events">All Tracking Events</a></div>
-  `);
+    <div class="form-actions">
+      <button type="button" id="shipment-progress-download" class="button">Download Progress CSV</button>
+      <a class="button secondary" href="#events">All Tracking Events</a>
+    </div>
+    <p id="shipment-progress-download-error" class="feedback error" role="status" hidden></p>
+    ${table(['CSV line', 'PRO number', 'Event recorded', 'Current status', 'Current event time'], results)}
+  `, { note: 'The CSV includes current PRO numbers, tracking links and the recorded times for their current statuses.' });
+  const button = output.querySelector('#shipment-progress-download');
+  const error = output.querySelector('#shipment-progress-download-error');
+  button.addEventListener('click', () => {
+    error.hidden = true;
+    let contents;
+    try {
+      contents = exportShipmentProgressCsv(result.events, location.origin);
+    } catch {
+      error.textContent = 'The tracking events are saved. Submit the same batch again to recover the current tracking details.';
+      error.hidden = false;
+      return;
+    }
+    try {
+      const filename = originalFilename.replace(/\.csv$/i, '') + '-progress.csv';
+      downloadCsv(contents, filename);
+    } catch {
+      error.textContent = 'The CSV download could not be prepared. The tracking events are saved. Try the download again.';
+      error.hidden = false;
+    }
+  });
+  button.focus();
 }
 
 function normalizedPayload(rows) {
@@ -168,9 +199,10 @@ export function renderShipmentProgressImport(container, context) {
   bindForm(form, async values => {
     const revision = version;
     output.replaceChildren();
+    const file = values.get('csv');
     let decoded;
     try {
-      decoded = await decodeCsvFile(values.get('csv'), {
+      decoded = await decodeCsvFile(file, {
         maxBytes: maxShipmentCsvBytes,
         emptyMessage: 'Choose a CSV file with at least one PRO number.',
       });
@@ -203,10 +235,11 @@ export function renderShipmentProgressImport(container, context) {
         });
         if (!context.active()) return;
         if (!Array.isArray(result?.events) || result.events.length !== rows.length ||
-            result.events.some((receipt, index) => receipt?.row !== index + 1 || !receipt.pro || !receipt.shipmentId || !receipt.status)) {
+            result.events.some((receipt, index) => receipt?.row !== index + 1 || !receipt.canonicalPro ||
+              !receipt.shipmentId || !receipt.status || !receipt.currentStatus)) {
           throw new Error('The server returned incomplete event results. Submit the same event details again to recover them.');
         }
-        showResults(output, rows, result);
+        showResults(output, rows, result, file.name);
       } catch (error) {
         if (!context.active()) return;
         if (!error.errors?.length) throw error;

@@ -1,5 +1,5 @@
-import { readCsv } from './csv.js';
-import { maxShipmentRows } from './shipment-csv.js';
+import { readCsv, writeCsv } from './csv.js';
+import { maxShipmentRows, shipmentTrackingLink } from './shipment-csv.js';
 import { statuses } from './ui.js';
 
 const normalized = value => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -91,4 +91,23 @@ export function prepareShipmentProgress(parsed, defaults = {}) {
     return { line, event, errors };
   });
   return { rows };
+}
+
+export function exportShipmentProgressCsv(receipts, origin = location.origin) {
+  const headers = ['pro_number', 'tracking_url', 'current_status', 'current_event_date', 'current_event_time',
+    'current_event_time_zone', 'current_event_utc_offset'];
+  const rows = receipts.map((receipt, index) => {
+    const { row, canonicalPro, currentStatus, currentEventDate, currentEventTime, currentTimeZone, currentUtcOffset } = receipt;
+    const timing = [currentEventDate, currentEventTime, currentTimeZone, currentUtcOffset];
+    const hasTiming = timing.every(value => typeof value === 'string' && value.length);
+    if (row !== index + 1 || !Object.hasOwn(statuses, currentStatus) || !canonicalPro ||
+        (!hasTiming && !timing.every(value => value === null))) {
+      throw new Error('The current shipment details could not be read. Submit the same batch again to recover them.');
+    }
+    return [
+      canonicalPro, shipmentTrackingLink(canonicalPro, origin), statuses[currentStatus],
+      currentEventDate, currentEventTime, currentTimeZone, currentUtcOffset ? 'UTC' + currentUtcOffset : '',
+    ];
+  });
+  return writeCsv([headers, ...rows]);
 }

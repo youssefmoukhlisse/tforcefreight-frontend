@@ -463,7 +463,7 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     const eventFields = { eventDate: '2025-01-09', eventTime: '12:20', timeZone: 'America/New_York',
       city: 'Albany', state: 'NY', country: 'US', source: 'QA bulk import scan', notes: 'Internal bulk note', trailer: 'TEST-22' };
     const existing = await change(`${shipments}/${newer.id}/events`, {
-      ...eventFields, status: 'in_transit', kind: 'confirmed', version: newer.version,
+      ...eventFields, eventTime: '18:45', timeZone: 'UTC', status: 'in_transit', kind: 'confirmed', version: newer.version,
     });
     assert.equal(existing.status, 201, existing.body.error);
     const rows = [
@@ -499,6 +499,12 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     assert.deepEqual(inserted.events.map(row => [row.row, row.pro, row.shipmentId, row.status]), [
       [1, 'INT-001234567', prefixed.id, 'delivery_attempt_failed'], [2, newer.pro, newer.id, 'picked_up'],
     ]);
+    const snapshot = row => [row.canonicalPro, row.currentStatus, row.currentEventDate,
+      row.currentEventTime, row.currentTimeZone, row.currentUtcOffset];
+    assert.deepEqual(inserted.events.map(snapshot), [
+      ['001234567', 'delivery_attempt_failed', '2025-01-09', '12:20', 'America/New_York', '-05:00'],
+      [newer.pro, 'in_transit', '2025-01-09', '18:45', 'UTC', '+00:00'],
+    ]);
     assert.equal((await send({ ...draft, events: [...rows].reverse() })).status, 409);
     assert.deepEqual(confirmed.slice(recentNotices).map(entry => entry.eventId), [inserted.events[0].eventId]);
 
@@ -511,6 +517,37 @@ test('PostgreSQL shipment routes preserve issued PROs, atomic updates, confirmed
     assert.doesNotMatch(JSON.stringify(recent), /Internal bulk note|QA bulk import scan/);
     const log = await pool.query('SELECT actor_id,action,metadata FROM audit_logs WHERE target_id=$1', [importId]);
     assert.deepEqual(log.rows, [{ actor_id: users.get('operator').id, action: 'events.imported', metadata: { total: 2 } }]);
+
+    const stored = await pool.query('SELECT receipts FROM shipment_event_imports WHERE import_id=$1', [importId]);
+    assert.deepEqual(stored.rows[0].receipts, inserted.events.map(({ row, pro, shipmentId, eventId, status }) =>
+      ({ row, pro, shipmentId, eventId, status })));
+
+    const target = `${shipments}/${newer.id}`;
+    const latest = (await request(target, { role: 'operator' })).body.shipment;
+    const reissued = await change(target, { pro: '001234566', version: latest.version }, 'PATCH');
+    assert.equal(reissued.status, 200, reissued.body.error);
+    const update = await change(target + '/events', { ...eventFields, eventDate: '2025-01-10',
+      eventTime: '14:45', timeZone: 'America/Chicago', status: 'out_for_delivery', kind: 'confirmed', version: reissued.body.shipment.version });
+    assert.equal(update.status, 201, update.body.error);
+    const refreshed = await send(draft);
+    assert.equal(refreshed.status, 200, refreshed.body.error);
+    assert.equal(refreshed.body.events[1].eventId, inserted.events[1].eventId);
+    assert.equal(refreshed.body.events[1].pro, newer.pro);
+    assert.equal(refreshed.body.events[1].status, 'picked_up');
+    assert.deepEqual(snapshot(refreshed.body.events[1]), ['001234566', 'out_for_delivery', '2025-01-10', '14:45', 'America/Chicago', '-06:00']);
+
+    const expected = await change(target + '/events', { ...eventFields, eventDate: '2025-01-11',
+      status: 'delivery_appointment_scheduled', kind: 'expected', version: update.body.shipment.version });
+    assert.equal(expected.status, 201, expected.body.error);
+    let currentVersion = expected.body.shipment.version;
+    for (const eventId of [existing.body.event.id, inserted.events[1].eventId, update.body.event.id]) {
+      const removed = await change(`${target}/events/${eventId}`, { version: currentVersion }, 'DELETE');
+      assert.equal(removed.status, 200, removed.body.error);
+      currentVersion = removed.body.shipment.version;
+    }
+    const cleared = await send(draft);
+    assert.equal(cleared.status, 200, cleared.body.error);
+    assert.deepEqual(snapshot(cleared.body.events[1]), ['001234566', 'created', null, null, null, null]);
   });
 
   await t.test('a late bulk progress failure rolls back event history and queued notices', async () => {

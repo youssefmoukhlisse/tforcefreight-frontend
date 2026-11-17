@@ -39,3 +39,14 @@ export async function decodeCsvFile(file, { maxBytes, emptyMessage }) {
     throw new Error('The file could not be read as UTF-8. Save it as CSV UTF-8 and try again.');
   }
 }
+
+export function downloadCsv(contents, filename) {
+  const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}

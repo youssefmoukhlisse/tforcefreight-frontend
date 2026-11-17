@@ -116,7 +116,7 @@ export function parseShipmentCsv(text) {
 }
 
 export function shipmentTrackingLink(pro, origin = location.origin) {
-  if (!/^[0-9]{9}$/.test(pro)) throw new Error('The server returned an invalid PRO number.');
+  if (!/^(?:[0-9]{9}|INT-[A-Z0-9][A-Z0-9-]{3,31})$/.test(pro)) throw new Error('The server returned an invalid PRO number.');
   const link = new URL('/ltl/apps/Tracking', origin);
   link.hash = new URLSearchParams({ pro }).toString();
   return link.href;

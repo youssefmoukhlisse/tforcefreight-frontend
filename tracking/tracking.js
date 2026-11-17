@@ -365,7 +365,7 @@ api('/api/config').then(data => {
 
 function linkedPro() {
   const pro = new URLSearchParams(location.hash.slice(1)).get('pro');
-  return /^[0-9]{9}$/.test(pro) ? pro : '';
+  return /^(?:[0-9]{9}|INT-[A-Z0-9][A-Z0-9-]{3,31})$/.test(pro) ? pro : '';
 }
 
 function searchFor(numbers) {

@@ -307,8 +307,16 @@ async function verifyBulkProgress(page, publicContext, { csv, records, receipts 
   assert.deepEqual(replay.events, saved.result.events);
   assert.deepEqual(replay.events.map(event => event.pro), receipts.map(row => row.pro));
 
+  const firstShipment = receipts[0];
+  const { shipment } = await (await page.request.get(origin + '/api/admin/shipments/' + firstShipment.id)).json();
+  const replacement = '0' + String(randomInt(100_000_000)).padStart(8, '0');
+  const changed = await json(page.context(), '/api/admin/shipments/' + firstShipment.id, {
+    version:shipment.version, pro:replacement,
+  }, 'PATCH');
+  assert.equal(changed.status(),200);
   const mixed = writeCsv(records.map(({ cells }, index) => [...cells,
-    ['event_status', 'Delivery Attempt Failed', 'Out for Delivery'][index]]));
+    ['event_status', 'Delivery Attempt Failed', 'Out for Delivery'][index],
+    ['event_time', '', '08:00'][index]]));
   await preview(mixed, '10:00');
   const updated = await record(201);
   assert.deepEqual(updated.events.map(event => event.status), ['delivery_attempt_failed','out_for_delivery']);
@@ -318,7 +326,7 @@ async function verifyBulkProgress(page, publicContext, { csv, records, receipts 
     const lookup = tab.waitForResponse(result => result.url().endsWith('/api/tracking/search'));
     await tab.goto(url);
     const shipment = (await (await lookup).json()).results[0].shipments[0];
-    assert.equal(shipment.pro, event.pro);
+    assert.equal(shipment.pro, event.canonicalPro);
     assert.equal(shipment.status, event.status);
     assert.equal(shipment.events.length,2,'An interrupted import must not repeat the original scan');
     await tab.getByRole('button', {name:'Show Details +'}).click();
@@ -327,6 +335,25 @@ async function verifyBulkProgress(page, publicContext, { csv, records, receipts 
   await tab.close();
   await snapshot(page,'admin-bulk-progress-result');
   pass('Re-upload exported CSV and record progress by PRO', 'Batch defaults and per-row statuses work, a lost response replays safely, and both statuses appear in public tracking');
+
+  const fileReady = page.waitForEvent('download');
+  await page.getByRole('button', {name:'Download Progress CSV',exact:true}).click();
+  const download = await fileReady;
+  assert.equal(download.suggestedFilename(),'shipments-with-tracking-progress.csv');
+  const reportCsv = await readFile(await download.path(),'utf8');
+  const {records: reportRows} = readCsv(reportCsv, {maxRows:2,rowLabel:'shipment',trimFields:false});
+  const [head, first, second] = reportRows.map(row => row.cells);
+  assert.deepEqual(head,['pro_number','tracking_url','current_status','current_event_date','current_event_time',
+    'current_event_time_zone','current_event_utc_offset']);
+  assert.deepEqual(first,[replacement,origin+'/ltl/apps/Tracking#pro='+replacement,'Delivery Attempt Failed',
+    '2025-01-07','10:00','America/New_York','UTC-05:00']);
+  assert.deepEqual(second,[receipts[1].pro,origin+'/ltl/apps/Tracking#pro='+receipts[1].pro,'Out for Delivery',
+    '2025-01-07','09:00','America/New_York','UTC-05:00']);
+  const trackingTab = watch(await publicContext.newPage());
+  await trackingTab.goto(first[1]);
+  await trackingTab.locator('.headline-status').filter({hasText:first[2]}).waitFor();
+  await trackingTab.close();
+  pass('Download current progress CSV', 'Canonical PRO and direct link are exported; an older scan does not replace the current event time');
 }
 
 try {

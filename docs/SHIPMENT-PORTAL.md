@@ -19,6 +19,8 @@ Use **Tracking Numbers → Import Shipment CSV** for up to 100 shipments per fil
 
 Use **Tracking Numbers → Update Progress from CSV** with the exported shipment CSV or the progress template. Select a confirmed status and enter its actual time, source and location for the batch. Nonblank `event_*` columns in the file override the corresponding batch fields, so one file can include both **Out for Delivery** and **Delivery Attempt Failed**. Include each shipment once per file. If a row is invalid or its PRO cannot be found, correct it before any events are saved.
 
+After recording progress, **Download Progress CSV** returns one row per shipment with its current PRO, tracking link, status, and the date, local time, time zone and UTC offset of its latest confirmed event. Resubmitting the same batch in the same browser tab refreshes the report without recording any event again.
+
 ## Database and privacy
 
 - `users`, `auth_sessions`, `auth_challenges`, `auth_password_resets`, `auth_recovery_codes`, `auth_rate_limits`, and `audit_logs` hold auth state and administrative history. Passwords are salted scrypt hashes; TOTP secrets are encrypted. Login and public lookup carry database-backed limits.

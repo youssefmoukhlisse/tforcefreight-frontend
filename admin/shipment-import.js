@@ -1,6 +1,6 @@
 import { api, bindForm, feedback, formFeedback, heading, html, section, table } from './ui.js';
 import { exportShipmentCsv, maxShipmentCsvBytes, maxShipmentRows, parseShipmentCsv } from './shipment-csv.js';
-import { csvImportRetryId, decodeCsvFile } from './import-utils.js';
+import { csvImportRetryId, decodeCsvFile, downloadCsv } from './import-utils.js';
 
 const numberFormat = new Intl.NumberFormat('en-US');
 
@@ -44,17 +44,6 @@ function rowPreview(parsed) {
   });
 }
 
-function downloadCsv(contents, filename) {
-  const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename.replace(/\.csv$/i, '') + '-with-tracking.csv';
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
 function reportCreated(container, { parsed, filename, result, contents }) {
   const count = result.shipments.length;
   const summary = result.replayed
@@ -77,7 +66,7 @@ function reportCreated(container, { parsed, filename, result, contents }) {
     const error = container.querySelector('#shipment-import-download-error');
     error.hidden = true;
     try {
-      downloadCsv(contents, filename);
+      downloadCsv(contents, filename.replace(/\.csv$/i, '') + '-with-tracking.csv');
     } catch {
       error.textContent = 'The CSV download could not be prepared. The shipments are saved. Retry the download.';
       error.hidden = false;
